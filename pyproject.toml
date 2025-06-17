@@ -46,7 +46,8 @@ dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.0",
     "codespell>=2.4.1",
-    "basedpyright>=1.28.2",
+    "ty>=0.0.1a10",
+    "pre-commit>=3.8.0",
 ]
 
 # ---- Build system ----
@@ -108,3 +109,9 @@ testpaths = [
     "src",
     "tests",
 ]
+
+# ---- Security scanning ----
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # Skip assert_used test
