@@ -4,6 +4,15 @@
 # as `from linkhut_lib import create_bookmark`
 # against the `from linkhut_lib.linkhut_lib import create_bookmark`
 
+from .exceptions import (
+    APIError,
+    BookmarkExistsError,
+    BookmarkNotFoundError,
+    InvalidDateFormatError,
+    InvalidTagFormatError,
+    InvalidURLError,
+    LinkHutError,
+)
 from .linkhut_lib import (
     create_bookmark,
     delete_bookmark,
@@ -23,4 +32,11 @@ __all__: list[str] = [
     "delete_bookmark",
     "rename_tag",
     "delete_tag",
+    "LinkHutError",
+    "InvalidURLError",
+    "BookmarkNotFoundError",
+    "InvalidDateFormatError",
+    "InvalidTagFormatError",
+    "APIError",
+    "BookmarkExistsError",
 ]

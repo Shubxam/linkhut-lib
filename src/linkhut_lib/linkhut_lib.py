@@ -14,6 +14,11 @@ from httpx import Response
 from loguru import logger
 
 from . import utils
+from .exceptions import (
+    APIError,
+    BookmarkExistsError,
+    BookmarkNotFoundError,
+)
 
 logger.remove()
 logger.add(
@@ -46,6 +51,11 @@ def get_bookmarks(
 
     Returns:
         list[dict]: list of dictionaries containing bookmark metadata.
+        
+    Raises:
+        InvalidDateFormatError: If date format is invalid.
+        BookmarkNotFoundError: If no bookmarks found for the given criteria.
+        APIError: If API request fails.
     """
     fields: dict[str, str] = {}
     action: str
@@ -65,12 +75,8 @@ def get_bookmarks(
             # bookmark_get expects tags=tag1+tag2...
             fields["tag"] = tag.replace(" ", "+").replace(",", "+")
         if date:
-            try:
-                # bookmark_get takes dt=CCYY-MM-DD
-                utils.is_valid_date(date)  # validate date format
-            except ValueError as e:
-                logger.error(f"Invalid date format for {date}: {e}")
-                return [{"error": "invalid_date_format"}]
+            # bookmark_get takes dt=CCYY-MM-DD
+            utils.is_valid_date(date)  # validate date format - will raise InvalidDateFormatError if invalid
             fields["dt"] = date
         if url:
             # TODO: Add URL encoding
@@ -86,25 +92,20 @@ def get_bookmarks(
         action = "bookmark_recent"
         fields["count"] = "15"
 
-    try:
-        response: Response = utils.linkhut_api_call(action=action, payload=fields)
-        fetched_bookmarks: list[dict[str, str]] = response.json().get("posts", [])
+    response: Response = utils.linkhut_api_call(action=action, payload=fields)
+    fetched_bookmarks: list[dict[str, str]] = response.json().get("posts", [])
 
-        # if bookmarks are found, posts list will not be empty
-        if fetched_bookmarks:
-            logger.debug("Bookmarks fetched successfully")
-            return fetched_bookmarks
-        elif response.json().get("result_code") == "something went wrong" or not fetched_bookmarks:
-            # result code "something went wrong" indicates posts/get endpoint was called with wrong url
-            # todo: update logger error class severity equal to debug
-            logger.warning("No Bookmarks Found")
-            return [{"error": "no_bookmarks_found"}]
-        else:
-            logger.warning("No bookmarks found for the given criteria")
-            return [{"error": "unknown_error"}]
-    except Exception as e:
-        logger.error(f"Error fetching bookmarks: {e}")
-        return [{"error": "error_fetching_bookmarks"}]
+    # if bookmarks are found, posts list will not be empty
+    if fetched_bookmarks:
+        logger.debug("Bookmarks fetched successfully")
+        return fetched_bookmarks
+    elif response.json().get("result_code") == "something went wrong" or not fetched_bookmarks:
+        # result code "something went wrong" indicates posts/get endpoint was called with wrong url
+        logger.warning("No Bookmarks Found")
+        raise BookmarkNotFoundError("No bookmarks found for the given criteria")
+    else:
+        logger.warning("No bookmarks found for the given criteria")
+        raise BookmarkNotFoundError("No bookmarks found for the given criteria")
 
 
 def create_bookmark(
@@ -136,13 +137,14 @@ def create_bookmark(
 
     Returns:
         dict[str, str]: The created bookmark's metadata
+        
+    Raises:
+        InvalidURLError: If URL format is invalid.
+        BookmarkExistsError: If bookmark already exists and replace=False.
+        APIError: If API request fails.
     """
-    try:
-        # must start with http:// or https://
-        utils.verify_url(url)
-    except Exception as e:
-        logger.error(f"Invalid URL: {url}. Error: {e}")
-        return {"error": "invalid_url"}
+    # must start with http:// or https://
+    utils.verify_url(url)  # will raise InvalidURLError if invalid
 
     action = "bookmark_create"
 
@@ -172,19 +174,15 @@ def create_bookmark(
     if note:
         fields["extended"] = note
 
-    try:
-        response: Response = utils.linkhut_api_call(action=action, payload=fields)
-        response_dict: dict[str, str] = response.json()
-        status_code: int = response.status_code
-        if status_code == 200 and response_dict.get("result_code") == "done":
-            logger.debug(f"Bookmark created successfully: {response_dict}")
-            return fields
-        else:
-            logger.warning(f"Failed to create bookmark: {response_dict}")
-            return {"error": "bookmark_exists"}
-    except Exception as e:
-        logger.error(f"Error creating bookmark: {e}")
-        return {"error": "API error"}
+    response: Response = utils.linkhut_api_call(action=action, payload=fields)
+    response_dict: dict[str, str] = response.json()
+    status_code: int = response.status_code
+    if status_code == 200 and response_dict.get("result_code") == "done":
+        logger.debug(f"Bookmark created successfully: {response_dict}")
+        return fields
+    else:
+        logger.warning(f"Failed to create bookmark: {response_dict}")
+        raise BookmarkExistsError("Bookmark already exists or creation failed")
 
 
 def update_bookmark(
@@ -211,41 +209,37 @@ def update_bookmark(
         replace (bool): Whether to replace existing data or append to it
 
     Returns:
-        dict[str, str]: Status information about the update operation
+        dict[str, str]: The updated bookmark's metadata
+        
+    Raises:
+        APIError: If no update parameters provided or API request fails.
+        BookmarkNotFoundError: If bookmark doesn't exist and creation fails.
+        InvalidURLError: If URL format is invalid.
     """
 
-    # check if there is nothing to update, if so return false
+    # check if there is nothing to update, if so raise an error
     if not new_tag and not new_note and new_private is None and new_to_read is None:
         logger.debug("No updates provided. Nothing to do.")
-        return {"status": "missing_update_parameters"}
+        raise APIError("No update parameters provided")
 
     fields_to_inherit: set[str] = {"description", "tags", "extended", "shared", "toread"}
 
     # check for existing bookmark with the given URL
-    fetched_bookmark: dict[str, str] = get_bookmarks(url=url)[0]
-
-    # if no, then create a new bookmark with given values
-    if fetched_bookmark.get("error") == "no_bookmarks_found":
+    try:
+        bookmarks = get_bookmarks(url=url)
+        fetched_bookmark: dict[str, str] = bookmarks[0]
+    except BookmarkNotFoundError:
+        # if no bookmark found, create a new one with given values
         logger.debug(f"Bookmark with URL {url} not found. Creating a new one.")
         private: bool = new_private if new_private is not None else False
         to_read: bool = new_to_read if new_to_read is not None else False
         bookmark_meta: dict[str, str] = create_bookmark(
             url=url, tags=new_tag, note=new_note, private=private, to_read=to_read
         )
-        bookmark_meta["status"] = "no_bookmark_found"
         return bookmark_meta
 
-    elif fetched_bookmark.get("error") == "invalid_url_format":
-        logger.debug(f"Invalid URL format: {url}. Please provide a valid URL.")
-        # propagate the error to the calling function
-        return {"error": "invalid_url_format"}
-
-    elif fetched_bookmark.get("error"):
-        logger.debug("Unexpected error occurred while fetching bookmark data.")
-        return {"error": "unknown_error"}
-
-    # if yes
-    elif fields_to_inherit.issubset(fetched_bookmark.keys()):
+    # if bookmark exists, update it
+    if fields_to_inherit.issubset(fetched_bookmark.keys()):
         # get existing bookmark meta
         title: str = fetched_bookmark.get("description", url)
         tags: str = fetched_bookmark.get("tags", "")
@@ -275,7 +269,7 @@ def update_bookmark(
             and not new_note
         ):
             logger.info(f"Bookmark with URL {url} already has the desired status. Nothing to do.")
-            return {"status": "no_update_needed"}
+            return fetched_bookmark  # Return existing bookmark data
 
         logger.info(f"Bookmark with URL {url} already exists. Updating it.")
 
@@ -300,7 +294,7 @@ def update_bookmark(
         return bookmark_meta
     else:
         logger.debug("Unexpected bookmark format received. Missing required fields.")
-        return {"error": "unknown_error"}
+        raise APIError("Unexpected bookmark format received. Missing required fields.")
 
 
 def get_reading_list(count: int = 5) -> list[dict[str, str]]:
@@ -311,18 +305,19 @@ def get_reading_list(count: int = 5) -> list[dict[str, str]]:
         count (int): Number of bookmarks to fetch (default: 5)
 
     Returns:
-        None: Results are printed directly to stdout
+        list[dict[str, str]]: List of bookmarks marked as to-read
+        
+    Raises:
+        BookmarkNotFoundError: If no bookmarks found in the reading list.
+        APIError: If API request fails.
     """
-    reading_list: list[dict[str, str]] = get_bookmarks(tag="unread", count=count)
-    if reading_list[0].get("error") == "no_bookmarks_found":
-        logger.info("No bookmarks found in the reading list.")
-        return [{"error": "no_bookmarks_found"}]
-    elif reading_list:
+    try:
+        reading_list: list[dict[str, str]] = get_bookmarks(tag="unread", count=count)
         logger.debug(f"Reading list fetched successfully: {json.dumps(reading_list, indent=2)}")
         return reading_list
-    else:
-        logger.error("No bookmarks found in the reading list.")
-        return [{"error": "api_error"}]
+    except BookmarkNotFoundError:
+        logger.info("No bookmarks found in the reading list.")
+        raise BookmarkNotFoundError("No bookmarks found in the reading list") from None
 
 
 def delete_bookmark(url: str) -> dict[str, str]:
@@ -330,24 +325,22 @@ def delete_bookmark(url: str) -> dict[str, str]:
     Delete a bookmark.
 
     Args:
-        bookmark_id (str): ID of the bookmark to delete
+        url (str): URL of the bookmark to delete
 
     Returns:
-        Dict[str, Any]: Response from the API
+        dict[str, str]: Success status information
+        
+    Raises:
+        InvalidURLError: If URL format is invalid.
+        BookmarkNotFoundError: If bookmark doesn't exist.
+        APIError: If API request fails.
     """
     action: str = "bookmark_delete"
     fields: dict[str, str] = {"url": url}
 
-    try:
-        # verify the URL format before making the API call
-        utils.verify_url(url)
-        response: Response = utils.linkhut_api_call(action=action, payload=fields)
-    except ValueError as e:
-        logger.error(f"Invalid URL format: {url}. Error: {e}")
-        return {"error": "invalid_url_format"}
-    except Exception as e:
-        logger.error(f"Error deleting bookmark: {e}")
-        return {"error": "api_error"}
+    # verify the URL format before making the API call
+    utils.verify_url(url)  # will raise InvalidURLError if invalid
+    response: Response = utils.linkhut_api_call(action=action, payload=fields)
 
     result_code: str = response.json().get("result_code", "")
 
@@ -356,7 +349,7 @@ def delete_bookmark(url: str) -> dict[str, str]:
         return {"bookmark_deletion": "success"}
     else:
         logger.error(f"Unable to delete bookmark with URL {url}. Result code: {result_code}")
-        return {"bookmark_deletion": "failure"}
+        raise BookmarkNotFoundError(f"Unable to delete bookmark with URL {url}. Bookmark may not exist.")
 
 
 def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
@@ -368,22 +361,19 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
         new_tag (str): New tag name
 
     Returns:
-        Dict[str, Any]: Response from the API
+        dict[str, str]: Success status information
+        
+    Raises:
+        InvalidTagFormatError: If tag format is invalid.
+        APIError: If API request fails or tag doesn't exist.
     """
     action = "tag_rename"
     fields = {"old": old_tag, "new": new_tag}
 
-    try:
-        # verify the tag format before making the API call
-        if not utils.is_valid_tag(old_tag) or not utils.is_valid_tag(new_tag):
-            raise ValueError(f"Invalid tag format: {old_tag} or {new_tag}")
-        response: Response = utils.linkhut_api_call(action=action, payload=fields)
-    except ValueError as e:
-        logger.error(f"Invalid tag format: {old_tag} or {new_tag}. Error: {e}")
-        return {"error": "invalid_tag_format"}
-    except Exception as e:
-        logger.error(f"Error renaming tag: {e}")
-        return {"error": "api_error"}
+    # verify the tag format before making the API call
+    utils.is_valid_tag(old_tag)  # will raise InvalidTagFormatError if invalid
+    utils.is_valid_tag(new_tag)  # will raise InvalidTagFormatError if invalid
+    response: Response = utils.linkhut_api_call(action=action, payload=fields)
 
     result_code: str = response.json().get("result_code", "")
 
@@ -392,7 +382,7 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
         return {"tag_renaming": "success"}
     else:
         logger.error(f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}")
-        return {"tag_error": "unsuccessful"}
+        raise APIError(f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}")
 
 
 # todo: #20 update error handling for delete_tag, rename_tag
@@ -404,22 +394,18 @@ def delete_tag(tag: str) -> dict[str, str]:
         tag (str): Tag to delete
 
     Returns:
-        Dict[str, Any]: Response from the API
+        dict[str, str]: Success status information
+        
+    Raises:
+        InvalidTagFormatError: If tag format is invalid.
+        APIError: If API request fails or tag doesn't exist.
     """
     action: str = "tag_delete"
     fields: dict[str, str] = {"tag": tag}
 
-    try:
-        # verify the tag format before making the API call
-        if not utils.is_valid_tag(tag):
-            raise ValueError
-        response: Response = utils.linkhut_api_call(action=action, payload=fields)
-    except ValueError as e:
-        logger.error(f"Invalid tag format for {tag}: {e}.")
-        return {"error": "invalid_tag_format"}
-    except Exception as e:
-        logger.error(f"Error deleting tag: {e}")
-        return {"error": "api_error"}
+    # verify the tag format before making the API call
+    utils.is_valid_tag(tag)  # will raise InvalidTagFormatError if invalid
+    response: Response = utils.linkhut_api_call(action=action, payload=fields)
 
     result_code: str = response.json().get("result_code", "")
 
@@ -428,7 +414,7 @@ def delete_tag(tag: str) -> dict[str, str]:
         return {"tag_deletion": "success"}
     else:
         logger.error(f"Failed to delete tag '{tag}'. Tag doesn't exist. Result code: {result_code}")
-        return {"tag_deletion": "unsuccessful"}
+        raise APIError(f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}")
 
 
 # def get_tags() -> List[Dict[str, Any]]:

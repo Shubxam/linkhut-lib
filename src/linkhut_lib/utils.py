@@ -18,6 +18,12 @@ from .config import (
     LINKPREVIEW_BASEURL,
     LINKPREVIEW_HEADER,
 )
+from .exceptions import (
+    APIError,
+    InvalidDateFormatError,
+    InvalidTagFormatError,
+    InvalidURLError,
+)
 
 logger.remove()
 logger.add(
@@ -36,7 +42,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     if site == "LinkHut":
         pat: str | None = os.getenv("LH_PAT")
         if not pat:
-            raise ValueError("Error: LH_PAT environment variable not set.")
+            raise APIError("LH_PAT environment variable not set")
         header: dict[str, str] = LINKHUT_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
@@ -45,7 +51,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     elif site == "LinkPreview":
         pat: str | None = os.getenv("LINK_PREVIEW_API_KEY")
         if not pat:
-            raise ValueError("Error: LP_API_KEY environment variable not set.")
+            raise APIError("LINK_PREVIEW_API_KEY environment variable not set")
         header: dict[str, str] = LINKPREVIEW_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
@@ -57,7 +63,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     return request_headers
 
 
-def make_get_request(url: str, header: dict[str, str]) -> httpx.Response:
+def make_get_request(url: str, header: dict[str, str], payload: dict[str, str] | None = None) -> httpx.Response:
     """
     Make a GET request to the specified URL with the provided headers.
 
@@ -75,22 +81,24 @@ def make_get_request(url: str, header: dict[str, str]) -> httpx.Response:
     """
     try:
         logger.debug(f"making get request to following url: {url}")
-        response = httpx.get(url=url, headers=header)
+        response = httpx.get(url=url, headers=header, params=payload)
         logger.debug(
             f"response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}"
         )
         return response  # Ensure a response is always returned
 
     except httpx.HTTPStatusError as exc:
-        raise RuntimeError(
-            f"HTTP error occurred: {exc.response.status_code} - {exc.response.text}"
+        raise APIError(
+            f"HTTP error occurred: {exc.response.text}",
+            status_code=exc.response.status_code,
+            response_data=exc.response.json() if exc.response.headers.get("content-type", "").startswith("application/json") else None
         ) from exc
     except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"An error occurred while requesting {exc.request.url!r}: {exc}"
+        raise APIError(
+            f"Network error occurred while requesting {exc.request.url!r}: {exc}"
         ) from exc
     except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred: {e}") from e
+        raise APIError(f"An unexpected error occurred: {e}") from e
 
 
 def linkhut_api_call(action: str, payload: dict[str, str]) -> httpx.Response:
@@ -232,12 +240,15 @@ def verify_url(url: str) -> bool:
 
     Returns:
         bool: True if the URL is valid, False otherwise.
+    
+    Raises:
+        InvalidURLError: If the URL format is invalid.
     """
     # todo: make url validation better, also check for pattern *://*.*
     if not url.startswith(("http://", "https://")):
-        raise ValueError("Invalid URL: must start with http:// or https://")
+        raise InvalidURLError("URL must start with http:// or https://")
     elif len(url) > 2048:
-        raise ValueError("Invalid URL: length exceeds 2048 characters")
+        raise InvalidURLError("URL length exceeds 2048 characters")
 
     return True
 
@@ -253,12 +264,12 @@ def is_valid_date(date_str: str) -> bool:
         bool: True if the date is valid, False otherwise.
 
     Raises:
-        ValueError: If the date format is invalid.
+        InvalidDateFormatError: If the date format is invalid.
     """
     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
     result = bool(re.match(date_pattern, date_str))
     if not result:
-        raise ValueError(f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD.")
+        raise InvalidDateFormatError(f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD.")
     return result
 
 
@@ -271,8 +282,17 @@ def is_valid_tag(tag: str) -> bool:
 
     Returns:
         bool: True if the tag is valid, False otherwise.
+        
+    Raises:
+        InvalidTagFormatError: If the tag format is invalid.
     """
-    return all(c.isalnum() or c in "-_" for c in tag) and len(tag) <= 50
+    if not tag:
+        raise InvalidTagFormatError("Tag cannot be empty")
+    if len(tag) > 50:
+        raise InvalidTagFormatError(f"Tag '{tag}' exceeds maximum length of 50 characters")
+    if not all(c.isalnum() or c in "-_" for c in tag):
+        raise InvalidTagFormatError(f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed")
+    return True
 
 
 if __name__ == "__main__":
