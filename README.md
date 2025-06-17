@@ -5,7 +5,11 @@ Python library for interacting with the LinkHut bookmarking service API.
 ## Installation
 
 ```bash
+# using pip
 pip install linkhut-lib
+
+# using uv
+uv add linkhut-lib
 ```
 
 ## Usage
