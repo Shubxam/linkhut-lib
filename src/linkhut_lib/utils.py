@@ -63,7 +63,9 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     return request_headers
 
 
-def make_get_request(url: str, header: dict[str, str], payload: dict[str, str] | None = None) -> httpx.Response:
+def make_get_request(
+    url: str, header: dict[str, str], payload: dict[str, str] | None = None
+) -> httpx.Response:
     """
     Make a GET request to the specified URL with the provided headers.
 
@@ -81,7 +83,7 @@ def make_get_request(url: str, header: dict[str, str], payload: dict[str, str] |
     """
     try:
         logger.debug(f"making get request to following url: {url}")
-        response = httpx.get(url=url, headers=header, params=payload)
+        response = httpx.get(url=url, headers=header, params=payload, timeout=30.0)
         logger.debug(
             f"response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}"
         )
@@ -91,7 +93,9 @@ def make_get_request(url: str, header: dict[str, str], payload: dict[str, str] |
         raise APIError(
             f"HTTP error occurred: {exc.response.text}",
             status_code=exc.response.status_code,
-            response_data=exc.response.json() if exc.response.headers.get("content-type", "").startswith("application/json") else None
+            response_data=exc.response.json()
+            if exc.response.headers.get("content-type", "").startswith("application/json")
+            else None,
         ) from exc
     except httpx.RequestError as exc:
         raise APIError(
@@ -240,7 +244,7 @@ def verify_url(url: str) -> bool:
 
     Returns:
         bool: True if the URL is valid, False otherwise.
-    
+
     Raises:
         InvalidURLError: If the URL format is invalid.
     """
@@ -269,7 +273,9 @@ def is_valid_date(date_str: str) -> bool:
     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
     result = bool(re.match(date_pattern, date_str))
     if not result:
-        raise InvalidDateFormatError(f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD.")
+        raise InvalidDateFormatError(
+            f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD."
+        )
     return result
 
 
@@ -282,7 +288,7 @@ def is_valid_tag(tag: str) -> bool:
 
     Returns:
         bool: True if the tag is valid, False otherwise.
-        
+
     Raises:
         InvalidTagFormatError: If the tag format is invalid.
     """
@@ -291,7 +297,9 @@ def is_valid_tag(tag: str) -> bool:
     if len(tag) > 50:
         raise InvalidTagFormatError(f"Tag '{tag}' exceeds maximum length of 50 characters")
     if not all(c.isalnum() or c in "-_" for c in tag):
-        raise InvalidTagFormatError(f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed")
+        raise InvalidTagFormatError(
+            f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed"
+        )
     return True
 
 

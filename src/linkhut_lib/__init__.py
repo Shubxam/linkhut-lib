@@ -23,7 +23,7 @@ from .linkhut_lib import (
     update_bookmark,
 )
 
-# all the public symbols defined under __all__ will be available when doin `from linkhut_lib import *`
+# all the public symbols defined under __all__ will be available when doing `from linkhut_lib import *`
 __all__: list[str] = [
     "get_bookmarks",
     "create_bookmark",

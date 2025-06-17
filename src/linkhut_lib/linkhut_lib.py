@@ -51,7 +51,7 @@ def get_bookmarks(
 
     Returns:
         list[dict]: list of dictionaries containing bookmark metadata.
-        
+
     Raises:
         InvalidDateFormatError: If date format is invalid.
         BookmarkNotFoundError: If no bookmarks found for the given criteria.
@@ -76,7 +76,9 @@ def get_bookmarks(
             fields["tag"] = tag.replace(" ", "+").replace(",", "+")
         if date:
             # bookmark_get takes dt=CCYY-MM-DD
-            utils.is_valid_date(date)  # validate date format - will raise InvalidDateFormatError if invalid
+            utils.is_valid_date(
+                date
+            )  # validate date format - will raise InvalidDateFormatError if invalid
             fields["dt"] = date
         if url:
             # TODO: Add URL encoding
@@ -137,7 +139,7 @@ def create_bookmark(
 
     Returns:
         dict[str, str]: The created bookmark's metadata
-        
+
     Raises:
         InvalidURLError: If URL format is invalid.
         BookmarkExistsError: If bookmark already exists and replace=False.
@@ -210,7 +212,7 @@ def update_bookmark(
 
     Returns:
         dict[str, str]: The updated bookmark's metadata
-        
+
     Raises:
         APIError: If no update parameters provided or API request fails.
         BookmarkNotFoundError: If bookmark doesn't exist and creation fails.
@@ -306,7 +308,7 @@ def get_reading_list(count: int = 5) -> list[dict[str, str]]:
 
     Returns:
         list[dict[str, str]]: List of bookmarks marked as to-read
-        
+
     Raises:
         BookmarkNotFoundError: If no bookmarks found in the reading list.
         APIError: If API request fails.
@@ -329,7 +331,7 @@ def delete_bookmark(url: str) -> dict[str, str]:
 
     Returns:
         dict[str, str]: Success status information
-        
+
     Raises:
         InvalidURLError: If URL format is invalid.
         BookmarkNotFoundError: If bookmark doesn't exist.
@@ -349,7 +351,9 @@ def delete_bookmark(url: str) -> dict[str, str]:
         return {"bookmark_deletion": "success"}
     else:
         logger.error(f"Unable to delete bookmark with URL {url}. Result code: {result_code}")
-        raise BookmarkNotFoundError(f"Unable to delete bookmark with URL {url}. Bookmark may not exist.")
+        raise BookmarkNotFoundError(
+            f"Unable to delete bookmark with URL {url}. Bookmark may not exist."
+        )
 
 
 def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
@@ -362,7 +366,7 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
 
     Returns:
         dict[str, str]: Success status information
-        
+
     Raises:
         InvalidTagFormatError: If tag format is invalid.
         APIError: If API request fails or tag doesn't exist.
@@ -382,7 +386,9 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
         return {"tag_renaming": "success"}
     else:
         logger.error(f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}")
-        raise APIError(f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}")
+        raise APIError(
+            f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
+        )
 
 
 # todo: #20 update error handling for delete_tag, rename_tag
@@ -395,7 +401,7 @@ def delete_tag(tag: str) -> dict[str, str]:
 
     Returns:
         dict[str, str]: Success status information
-        
+
     Raises:
         InvalidTagFormatError: If tag format is invalid.
         APIError: If API request fails or tag doesn't exist.
@@ -414,7 +420,9 @@ def delete_tag(tag: str) -> dict[str, str]:
         return {"tag_deletion": "success"}
     else:
         logger.error(f"Failed to delete tag '{tag}'. Tag doesn't exist. Result code: {result_code}")
-        raise APIError(f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}")
+        raise APIError(
+            f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}"
+        )
 
 
 # def get_tags() -> List[Dict[str, Any]]:
