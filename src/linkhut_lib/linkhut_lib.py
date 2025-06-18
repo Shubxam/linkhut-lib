@@ -15,9 +15,9 @@ from loguru import logger
 
 from . import utils
 from .exceptions import (
-    APIError,
     BookmarkExistsError,
     BookmarkNotFoundError,
+    RequestError,
 )
 
 logger.remove()
@@ -55,7 +55,7 @@ def get_bookmarks(
     Raises:
         InvalidDateFormatError: If date format is invalid.
         BookmarkNotFoundError: If no bookmarks found for the given criteria.
-        APIError: If API request fails.
+        RequestError: If API request fails.
     """
     fields: dict[str, str] = {}
     action: str
@@ -143,7 +143,7 @@ def create_bookmark(
     Raises:
         InvalidURLError: If URL format is invalid.
         BookmarkExistsError: If bookmark already exists and replace=False.
-        APIError: If API request fails.
+        RequestError: If API request fails.
     """
     # must start with http:// or https://
     utils.verify_url(url)  # will raise InvalidURLError if invalid
@@ -214,7 +214,7 @@ def update_bookmark(
         dict[str, str]: The updated bookmark's metadata
 
     Raises:
-        APIError: If no update parameters provided or API request fails.
+        RequestError: If no update parameters provided or API request fails.
         BookmarkNotFoundError: If bookmark doesn't exist and creation fails.
         InvalidURLError: If URL format is invalid.
     """
@@ -222,7 +222,7 @@ def update_bookmark(
     # check if there is nothing to update, if so raise an error
     if not new_tag and not new_note and new_private is None and new_to_read is None:
         logger.debug("No updates provided. Nothing to do.")
-        raise APIError("No update parameters provided")
+        raise RequestError("No update parameters provided")
 
     fields_to_inherit: set[str] = {"description", "tags", "extended", "shared", "toread"}
 
@@ -296,7 +296,7 @@ def update_bookmark(
         return bookmark_meta
     else:
         logger.debug("Unexpected bookmark format received. Missing required fields.")
-        raise APIError("Unexpected bookmark format received. Missing required fields.")
+        raise RequestError("Unexpected bookmark format received. Missing required fields.")
 
 
 def get_reading_list(count: int = 5) -> list[dict[str, str]]:
@@ -311,7 +311,7 @@ def get_reading_list(count: int = 5) -> list[dict[str, str]]:
 
     Raises:
         BookmarkNotFoundError: If no bookmarks found in the reading list.
-        APIError: If API request fails.
+        RequestError: If API request fails.
     """
     try:
         reading_list: list[dict[str, str]] = get_bookmarks(tag="unread", count=count)
@@ -335,7 +335,7 @@ def delete_bookmark(url: str) -> dict[str, str]:
     Raises:
         InvalidURLError: If URL format is invalid.
         BookmarkNotFoundError: If bookmark doesn't exist.
-        APIError: If API request fails.
+        RequestError: If API request fails.
     """
     action: str = "bookmark_delete"
     fields: dict[str, str] = {"url": url}
@@ -369,7 +369,7 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
 
     Raises:
         InvalidTagFormatError: If tag format is invalid.
-        APIError: If API request fails or tag doesn't exist.
+        RequestError: If API request fails or tag doesn't exist.
     """
     action = "tag_rename"
     fields = {"old": old_tag, "new": new_tag}
@@ -386,7 +386,7 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
         return {"tag_renaming": "success"}
     else:
         logger.error(f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}")
-        raise APIError(
+        raise RequestError(
             f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
         )
 
@@ -404,7 +404,7 @@ def delete_tag(tag: str) -> dict[str, str]:
 
     Raises:
         InvalidTagFormatError: If tag format is invalid.
-        APIError: If API request fails or tag doesn't exist.
+        RequestError: If API request fails or tag doesn't exist.
     """
     action: str = "tag_delete"
     fields: dict[str, str] = {"tag": tag}
@@ -420,7 +420,7 @@ def delete_tag(tag: str) -> dict[str, str]:
         return {"tag_deletion": "success"}
     else:
         logger.error(f"Failed to delete tag '{tag}'. Tag doesn't exist. Result code: {result_code}")
-        raise APIError(
+        raise RequestError(
             f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}"
         )
 

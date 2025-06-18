@@ -19,10 +19,10 @@ from .config import (
     LINKPREVIEW_HEADER,
 )
 from .exceptions import (
-    APIError,
     InvalidDateFormatError,
     InvalidTagFormatError,
     InvalidURLError,
+    RequestError,
 )
 
 logger.remove()
@@ -42,7 +42,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     if site == "LinkHut":
         pat: str | None = os.getenv("LH_PAT")
         if not pat:
-            raise APIError("LH_PAT environment variable not set")
+            raise RequestError("LH_PAT environment variable not set")
         header: dict[str, str] = LINKHUT_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
@@ -51,7 +51,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
     elif site == "LinkPreview":
         pat: str | None = os.getenv("LINK_PREVIEW_API_KEY")
         if not pat:
-            raise APIError("LINK_PREVIEW_API_KEY environment variable not set")
+            raise RequestError("LINK_PREVIEW_API_KEY environment variable not set")
         header: dict[str, str] = LINKPREVIEW_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
@@ -80,6 +80,7 @@ def make_get_request(
         RuntimeError: If the request fails or if the response is not JSON.
         httpx.HTTPStatusError: If the response status code indicates an error (4xx or 5xx).
         httpx.RequestError: If there is a network-related error.
+        RequestError: If the content type is not supported or if an unexpected error occurs.
     """
     try:
         logger.debug(f"making get request to following url: {url}")
@@ -90,7 +91,7 @@ def make_get_request(
         return response  # Ensure a response is always returned
 
     except httpx.HTTPStatusError as exc:
-        raise APIError(
+        raise RequestError(
             f"HTTP error occurred: {exc.response.text}",
             status_code=exc.response.status_code,
             response_data=exc.response.json()
@@ -98,11 +99,11 @@ def make_get_request(
             else None,
         ) from exc
     except httpx.RequestError as exc:
-        raise APIError(
+        raise RequestError(
             f"Network error occurred while requesting {exc.request.url!r}: {exc}"
         ) from exc
     except Exception as e:
-        raise APIError(f"An unexpected error occurred: {e}") from e
+        raise RequestError(f"An unexpected error occurred: {e}") from e
 
 
 def linkhut_api_call(action: str, payload: dict[str, str]) -> httpx.Response:

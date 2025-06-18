@@ -28,7 +28,7 @@ class InvalidTagFormatError(LinkHutError):
     pass
 
 
-class APIError(LinkHutError):
+class RequestError(LinkHutError):
     """Raised when API returns an error"""
 
     def __init__(
