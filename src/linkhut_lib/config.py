@@ -6,7 +6,8 @@ The actual API keys are inserted into these templates at runtime.
 """
 # TODO: make use of ENUMs and TypeAlias and Dataclasses
 
-# from enum import Enum
+from enum import Enum
+
 # from typing import TypeAlias
 
 # LinkHut API configuration
@@ -26,6 +27,18 @@ LINKHUT_API_ENDPOINTS: dict[str, str] = {
     "tag_delete": "/v1/tags/delete",
     "tag_rename": "/v1/tags/rename",
 }
+
+
+class LH_API_ENDPOINTS(Enum):
+    """Enum-like class for LinkHut API endpoints."""
+
+    BOOKMARK_GET = "/v1/posts/get"
+    BOOKMARK_RECENT = "/v1/posts/recent"
+    BOOKMARK_CREATE = "/v1/posts/add"
+    BOOKMARK_DELETE = "/v1/posts/delete"
+    TAG_SUGGEST = "/v1/posts/suggest"
+    TAG_DELETE = "/v1/tags/delete"
+    TAG_RENAME = "/v1/tags/rename"
 
 
 # LinkPreview API configuration
