@@ -8,6 +8,7 @@ import sys
 from typing import Literal
 
 import httpx
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -24,6 +25,7 @@ from .exceptions import (
     InvalidURLError,
     RequestError,
 )
+from .models import APIResponse, GETResponse, HTMLResponse
 
 logger.remove()
 logger.add(
@@ -65,7 +67,7 @@ def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, st
 
 def make_get_request(
     url: str, header: dict[str, str], payload: dict[str, str] | None = None
-) -> httpx.Response:
+) -> GETResponse:
     """
     Make a GET request to the specified URL with the provided headers.
 
@@ -74,7 +76,7 @@ def make_get_request(
         header (dict[str, str]): The headers to include in the request.
 
     Returns:
-        httpx.Response: The Response from the request.
+        GETResponse: The structured response object.
 
     Raises:
         RuntimeError: If the request fails or if the response is not JSON.
@@ -88,7 +90,26 @@ def make_get_request(
         logger.debug(
             f"response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}"
         )
-        return response  # Ensure a response is always returned
+        status_code: int = response.status_code
+        request_url: str = response.url.__str__()
+        content_type_str: str = response.headers.get("content-type", "")
+        if "application/json" in content_type_str:
+            content_type = "application/json"
+            data = APIResponse(content=response.json())
+        elif "text/html" in content_type_str:
+            content_type = "text/html"
+            data = HTMLResponse(content=BeautifulSoup(response.text, "html.parser"))
+        else:
+            raise RequestError(
+                f"Unsupported content type: {content_type_str}. Expected 'application/json' or 'text/html'."
+            )
+        response_object: GETResponse = GETResponse(
+            status_code=status_code,
+            content_type=content_type,
+            url=request_url,
+            data=data,
+        )
+        return response_object
 
     except httpx.HTTPStatusError as exc:
         raise RequestError(
