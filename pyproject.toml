@@ -37,6 +37,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "pydantic>=2.11.7",
 ]
 
 # ---- Dev dependencies ----
@@ -48,6 +49,8 @@ dev = [
     "codespell>=2.4.1",
     "ty>=0.0.1a10",
     "pre-commit>=3.8.0",
+    "ipykernel>=6.29.5",
+    "bs4>=0.0.2",
 ]
 
 # ---- Build system ----
