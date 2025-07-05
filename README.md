@@ -32,7 +32,7 @@ client = LinkhutLib()
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.13+
 - httpx
 - loguru
 - python-dotenv

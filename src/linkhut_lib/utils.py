@@ -19,20 +19,9 @@ from .config import (
     LINKPREVIEW_BASEURL,
     LINKPREVIEW_HEADER,
 )
-from .exceptions import (
-    InvalidDateFormatError,
-    InvalidTagFormatError,
-    InvalidURLError,
-    RequestError,
-)
-from .models import APIResponse, GETResponse, HTMLResponse
-
-logger.remove()
-logger.add(
-    sys.stderr,
-    level="INFO",
-    format="<green>{time:YYYY-MM-DD at HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-)
+def setup_logger():
+    logger.remove()
+    logger.add(sys.stderr, colorize=True, level='INFO')
 
 
 def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, str]:

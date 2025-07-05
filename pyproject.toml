@@ -1,10 +1,5 @@
 # ---- Project Info and Dependencies ----
 
-[project.urls]
-Repository = "https://github.com/shubxam/linkhut-lib"
-# Homepage = "https://..."
-# Documentation = "https://..."
-
 [project]
 name = "linkhut-lib"
 description = "Python library for interacting with LinkHut bookmarking service API"
@@ -13,7 +8,7 @@ authors = [
 ]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.13"
 dynamic = ["version"]
 
 # https://pypi.org/classifiers/
@@ -31,8 +26,6 @@ classifiers = [
 
 keywords = ["bookmark-manager", "bookmarks", "api", "library"]
 
-# ---- Main dependencies ----
-
 dependencies = [
     "dotenv>=0.9.9",
     "httpx>=0.28.1",
@@ -40,27 +33,30 @@ dependencies = [
     "pydantic>=2.11.7",
 ]
 
-# ---- Dev dependencies ----
+[project.urls]
+Repository = "https://github.com/shubxam/linkhut-lib"
+# Homepage = "https://..."
+# Documentation = "https://..."
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.0",
     "codespell>=2.4.1",
     "ty>=0.0.1a10",
-    "pre-commit>=3.8.0",
-    "ipykernel>=6.29.5",
-    "bs4>=0.0.2",
+    "bandit>=1.8.5",
+    "funlog>=0.2.1",
 ]
 
 # ---- Build system ----
 
 [build-system]
-requires = ["hatchling", "uv-dynamic-versioning"]
+requires = ["hatchling >= 1.26", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-source = "uv-dynamic-versioning"
+source = "vcs"  # infer version from VCS (git, hg, etc.)
+fallback-version = "0.1.0"
 
 [tool.uv-dynamic-versioning]
 vcs = "git"
@@ -68,41 +64,70 @@ style = "pep440"
 bump = "true"
 fallback-version = "0.1.0"
 
+[tool.hatch.build.targets.sdist]
+# Specify the packages to include in the source distribution
+packages = ["src/linkhut_lib"]
+
 [tool.hatch.build.targets.wheel]
+# Specify the packages to include in the wheel distribution
 packages = ["src/linkhut_lib"]
 
 # ---- Settings ----
 
 [tool.ruff]
-line-length = 100
+line-length = 88
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "single"  # use single quotes for strings.
+indent-style = "space"  # indent with spaces, rather than tabs.
+skip-magic-trailing-comma = false  # respect magic trailing commas.
+line-ending = "auto"  # automatically detect the appropriate line ending.
 
 [tool.ruff.lint]
+fixable = ["ALL"]  # fix all fixable issues
+unfixable = []  # issues to not fix
+
 select = [
+    # See: https://docs.astral.sh/ruff/rules/
+    # Basic list from: https://docs.astral.sh/ruff/linter/#rule-selection
     "E", # https://docs.astral.sh/ruff/rules/#error-e
     "F", # https://docs.astral.sh/ruff/rules/#pyflakes-f
     "UP", # https://docs.astral.sh/ruff/rules/#pyupgrade-up
     "B", # https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "I", # https://docs.astral.sh/ruff/rules/#isort-i
+    # Other possibilities:
+    # "D" # https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    # "Q" # https://docs.astral.sh/ruff/rules/#flake8-quotes-q
+    # "COM" # https://docs.astral.sh/ruff/rules/#flake8-commas-com
+    # "SIM", # https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
 ]
 ignore = [
+    # Disable some rules that are overly pedantic. Add/remove as desired:
     "E501", # https://docs.astral.sh/ruff/rules/line-too-long/
     "E402", # https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file/
     "E731", # https://docs.astral.sh/ruff/rules/lambda-assignment/
+    # We use both ruff formatter and linter so some rules should always be disabled.
+    # See: https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
     "W191", # https://docs.astral.sh/ruff/rules/tab-indentation/
     "E111", # https://docs.astral.sh/ruff/rules/indentation-with-invalid-multiple/
     "E114", # https://docs.astral.sh/ruff/rules/indentation-with-invalid-multiple-comment/
     "E117", # https://docs.astral.sh/ruff/rules/over-indented/
-    "B008"
+    "D206", # https://docs.astral.sh/ruff/rules/docstring-tab-indentation/
+    "D300", # https://docs.astral.sh/ruff/rules/triple-single-quotes/
+    "Q000", # https://docs.astral.sh/ruff/rules/bad-quotes-inline-string/
+    "Q001", # https://docs.astral.sh/ruff/rules/bad-quotes-multiline-string/
+    "Q002", # https://docs.astral.sh/ruff/rules/bad-quotes-docstring/
+    "Q003", # https://docs.astral.sh/ruff/rules/avoidable-escaped-quote/
+    "COM812", # https://docs.astral.sh/ruff/rules/missing-trailing-comma/
+    "COM819", # https://docs.astral.sh/ruff/rules/prohibited-trailing-comma/
+    "ISC002", # https://docs.astral.sh/ruff/rules/multi-line-implicit-string-concatenation/
 ]
 
-[tool.basedpyright]
-include = ["src", "tests"]
-reportIgnoreCommentWithoutRule = false
-reportUnnecessaryTypeIgnoreComment = false
-reportMissingTypeStubs = false
-reportUnusedCallResult = false
-reportAny = false
-reportExplicitAny = false
+[tool.codespell]
+ignore-words-list = "IST,ist"  # ignore common misspellings
+skip = "*.ipynb,*.csv,NIFTY_500_live_sentiment.html,*.yml"  # files to skip
+write-changes = false  # whether to correct misspellings
 
 [tool.pytest.ini_options]
 python_files = ["*.py"]
@@ -113,8 +138,16 @@ testpaths = [
     "tests",
 ]
 
-# ---- Security scanning ----
-
 [tool.bandit]
-exclude_dirs = ["tests"]
-skips = ["B101"]  # Skip assert_used test
+# See: https://bandit.readthedocs.io/en/latest/config.html
+# use `# nosec issue-code` to ignore specific issues in code
+# Specify the directories to scan for security issues
+targets = [
+    "src",
+    "tests",
+    "devtools",
+]
+skips = ["B101", "B601"]  # don't alert for these specified issues
+
+[tool.bandit.assert_used]
+skips = ['*_test.py', 'test_*.py']  # remove assert statement warnings from tests.
