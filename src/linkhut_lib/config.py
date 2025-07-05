@@ -28,8 +28,12 @@ LINKHUT_API_ENDPOINTS: dict[str, str] = {
     "tag_rename": "/v1/tags/rename",
 }
 
+firefox_user_agent: str = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:139.0) Gecko/20100101 Firefox/139.0"
+)
 
-class LH_API_ENDPOINTS(Enum):
+
+class LH_API_ENDPOINT(Enum):
     """Enum-like class for LinkHut API endpoints."""
 
     BOOKMARK_GET = "/v1/posts/get"
