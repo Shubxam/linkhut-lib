@@ -247,71 +247,76 @@ def encode_url(url: str) -> str:
     )
 
 
-def verify_url(url: str) -> bool:
-    """
-    Verify if the URL is valid.
-    Args:
-        url (str): The URL to verify.
-
-    Returns:
-        bool: True if the URL is valid, False otherwise.
-
-    Raises:
-        InvalidURLError: If the URL format is invalid.
-    """
-    # todo: make url validation better, also check for pattern *://*.*
-    if not url.startswith(("http://", "https://")):
-        raise InvalidURLError("URL must start with http:// or https://")
-    elif len(url) > 2048:
-        raise InvalidURLError("URL length exceeds 2048 characters")
-
-    return True
+def tags_in_api_format(tags: list[Tag]) -> str:
+        """Return tags in string format separated by +"""
+        return "+".join(tag.name for tag in tags)
 
 
-def is_valid_date(date_str: str) -> bool:
-    """
-    Check if the given string is a valid date in YYYY-MM-DD format.
+# def verify_url(url: str) -> bool:
+#     """
+#     Verify if the URL is valid.
+#     Args:
+#         url (str): The URL to verify.
 
-    Args:
-        date_str (str): The date string to validate.
+#     Returns:
+#         bool: True if the URL is valid, False otherwise.
 
-    Returns:
-        bool: True if the date is valid, False otherwise.
+#     Raises:
+#         InvalidURLError: If the URL format is invalid.
+#     """
+#     # todo: make url validation better, also check for pattern *://*.*
+#     if not url.startswith(("http://", "https://")):
+#         raise InvalidURLError("URL must start with http:// or https://")
+#     elif len(url) > 2048:
+#         raise InvalidURLError("URL length exceeds 2048 characters")
 
-    Raises:
-        InvalidDateFormatError: If the date format is invalid.
-    """
-    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
-    result = bool(re.match(date_pattern, date_str))
-    if not result:
-        raise InvalidDateFormatError(
-            f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD."
-        )
-    return result
+#     return True
 
 
-def is_valid_tag(tag: str) -> bool:
-    """
-    Check if the given string is a valid tag.
+# def is_valid_date(date_str: str) -> bool:
+#     """
+#     Check if the given string is a valid date in YYYY-MM-DD format.
 
-    Args:
-        tag (str): The tag string to validate.
+#     Args:
+#         date_str (str): The date string to validate.
 
-    Returns:
-        bool: True if the tag is valid, False otherwise.
+#     Returns:
+#         bool: True if the date is valid, False otherwise.
 
-    Raises:
-        InvalidTagFormatError: If the tag format is invalid.
-    """
-    if not tag:
-        raise InvalidTagFormatError("Tag cannot be empty")
-    if len(tag) > 50:
-        raise InvalidTagFormatError(f"Tag '{tag}' exceeds maximum length of 50 characters")
-    if not all(c.isalnum() or c in "-_" for c in tag):
-        raise InvalidTagFormatError(
-            f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed"
-        )
-    return True
+#     Raises:
+#         InvalidDateFormatError: If the date format is invalid.
+#     """
+#     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+#     result = bool(re.match(date_pattern, date_str))
+#     if not result:
+#         raise InvalidDateFormatError(
+#             f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD."
+#         )
+#     return result
+
+
+# def is_valid_tag(tag: str) -> bool:
+#     """
+#     Check if the given string is a valid tag.
+
+#     Args:
+#         tag (str): The tag string to validate.
+
+#     Returns:
+#         bool: True if the tag is valid, False otherwise.
+
+#     Raises:
+#         InvalidTagFormatError: If the tag format is invalid.
+#     """
+#     if not tag:
+#         raise InvalidTagFormatError("Tag cannot be empty")
+#     if len(tag) > 50:
+#         raise InvalidTagFormatError(f"Tag '{tag}' exceeds maximum length of 50 characters")
+#     if not all(c.isalnum() or c in "-_" for c in tag):
+#         raise InvalidTagFormatError(
+#             f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed"
+#         )
+#     return True
 
 
 if __name__ == "__main__":
