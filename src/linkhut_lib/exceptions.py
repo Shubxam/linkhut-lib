@@ -43,7 +43,7 @@ class RequestError(LinkHutError):
 
     def __str__(self) -> str:
         if self.status_code:
-            return f"API Error {self.status_code}: {super().__str__()}"
+            return f'API Error {self.status_code}: {super().__str__()}'
         return super().__str__()
 
 

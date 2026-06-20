@@ -3,7 +3,6 @@
 
 import json
 import os
-import re
 import sys
 from typing import Literal
 
@@ -19,36 +18,40 @@ from .config import (
     LINKPREVIEW_BASEURL,
     LINKPREVIEW_HEADER,
 )
+
+
 def setup_logger():
     logger.remove()
     logger.add(sys.stderr, colorize=True, level='INFO')
 
 
-def get_request_headers(site: Literal["LinkHut", "LinkPreview"]) -> dict[str, str]:
+def get_request_headers(site: Literal['LinkHut', 'LinkPreview']) -> dict[str, str]:
     """
     Load the PAT from environment variables and return the request headers.
     """
     load_dotenv()  # Load environment variables from .env file
 
-    if site == "LinkHut":
-        pat: str | None = os.getenv("LH_PAT")
+    if site == 'LinkHut':
+        pat: str | None = os.getenv('LH_PAT')
         if not pat:
-            raise RequestError("LH_PAT environment variable not set")
+            raise RequestError('LH_PAT environment variable not set')
         header: dict[str, str] = LINKHUT_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
-        request_headers["Authorization"] = request_headers["Authorization"].format(PAT=pat)
+        request_headers['Authorization'] = request_headers['Authorization'].format(
+            PAT=pat
+        )
 
-    elif site == "LinkPreview":
-        pat: str | None = os.getenv("LINK_PREVIEW_API_KEY")
+    elif site == 'LinkPreview':
+        pat: str | None = os.getenv('LINK_PREVIEW_API_KEY')
         if not pat:
-            raise RequestError("LINK_PREVIEW_API_KEY environment variable not set")
+            raise RequestError('LINK_PREVIEW_API_KEY environment variable not set')
         header: dict[str, str] = LINKPREVIEW_HEADER
         # Create a copy of the header and format the PAT into it
         request_headers: dict[str, str] = header.copy()
-        request_headers["X-Linkpreview-Api-Key"] = request_headers["X-Linkpreview-Api-Key"].format(
-            API_KEY=pat
-        )
+        request_headers['X-Linkpreview-Api-Key'] = request_headers[
+            'X-Linkpreview-Api-Key'
+        ].format(API_KEY=pat)
 
     # logger.debug(f"header for {site} is {request_headers}")
     return request_headers
@@ -74,20 +77,20 @@ def make_get_request(
         RequestError: If the content type is not supported or if an unexpected error occurs.
     """
     try:
-        logger.debug(f"making get request to following url: {url}")
+        logger.debug(f'making get request to following url: {url}')
         response = httpx.get(url=url, headers=header, params=payload, timeout=30.0)
         logger.debug(
-            f"response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}"
+            f'response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}'
         )
         status_code: int = response.status_code
         request_url: str = response.url.__str__()
-        content_type_str: str = response.headers.get("content-type", "")
-        if "application/json" in content_type_str:
-            content_type = "application/json"
+        content_type_str: str = response.headers.get('content-type', '')
+        if 'application/json' in content_type_str:
+            content_type = 'application/json'
             data = APIResponse(content=response.json())
-        elif "text/html" in content_type_str:
-            content_type = "text/html"
-            data = HTMLResponse(content=BeautifulSoup(response.text, "html.parser"))
+        elif 'text/html' in content_type_str:
+            content_type = 'text/html'
+            data = HTMLResponse(content=BeautifulSoup(response.text, 'html.parser'))
         else:
             raise RequestError(
                 f"Unsupported content type: {content_type_str}. Expected 'application/json' or 'text/html'."
@@ -102,18 +105,20 @@ def make_get_request(
 
     except httpx.HTTPStatusError as exc:
         raise RequestError(
-            f"HTTP error occurred: {exc.response.text}",
+            f'HTTP error occurred: {exc.response.text}',
             status_code=exc.response.status_code,
             response_data=exc.response.json()
-            if exc.response.headers.get("content-type", "").startswith("application/json")
+            if exc.response.headers.get('content-type', '').startswith(
+                'application/json'
+            )
             else None,
         ) from exc
     except httpx.RequestError as exc:
         raise RequestError(
-            f"Network error occurred while requesting {exc.request.url!r}: {exc}"
+            f'Network error occurred while requesting {exc.request.url!r}: {exc}'
         ) from exc
     except Exception as e:
-        raise RequestError(f"An unexpected error occurred: {e}") from e
+        raise RequestError(f'An unexpected error occurred: {e}') from e
 
 
 def linkhut_api_call(action: str, payload: dict[str, str]) -> httpx.Response:
@@ -133,14 +138,14 @@ def linkhut_api_call(action: str, payload: dict[str, str]) -> httpx.Response:
 
     # Add query parameters if provided
     if payload:
-        url += "?"
+        url += '?'
         params: list[str] = []
         for key, value in payload.items():
-            params.append(f"{key}={value}")
-        url += "&".join(params)
+            params.append(f'{key}={value}')
+        url += '&'.join(params)
 
-    header: dict[str, str] = get_request_headers(site="LinkHut")
-    logger.debug(f"making request to {url} with header {header}")
+    header: dict[str, str] = get_request_headers(site='LinkHut')
+    logger.debug(f'making request to {url} with header {header}')
     response: httpx.Response = make_get_request(url=url, header=header)
     return response
 
@@ -158,27 +163,27 @@ def get_link_title(dest_url: str) -> str:
     """
     # verify_url(dest_url)
     title: str
-    dest_url_str: str = f"q={dest_url}"
+    dest_url_str: str = f'q={dest_url}'
 
     # fetch the following fields: title, description, url (disabling, as setting custom fields is supported but does not work with the API)
     # fields_str = "fields=title,description,url"
 
     # allow websites with blocked content
-    block_content: str = "block_content=false"
+    block_content: str = 'block_content=false'
 
-    api_endpoint: str = f"/?{block_content}&{dest_url_str}"
+    api_endpoint: str = f'/?{block_content}&{dest_url_str}'
     request_url: str = LINKPREVIEW_BASEURL + api_endpoint
 
-    logger.debug(f"making request to get title : {request_url}")
+    logger.debug(f'making request to get title : {request_url}')
 
-    header: dict[str, str] = get_request_headers("LinkPreview")
+    header: dict[str, str] = get_request_headers('LinkPreview')
 
     try:
         response: httpx.Response = make_get_request(url=request_url, header=header)
-        title_str: str = response.json().get("title", "")
+        title_str: str = response.json().get('title', '')
         title = title_str if title_str else dest_url
     except Exception as e:
-        logger.error(f"Error fetching the title for {dest_url}: {e}")
+        logger.error(f'Error fetching the title for {dest_url}: {e}')
         title = dest_url
 
     # function is supposed to send link title, so we send link title by handling the exceptions here.
@@ -196,12 +201,12 @@ def get_tags_suggestion(dest_url: str) -> str:
 
     Note: returns "AutoTagFetchFailed" if the request fails or no suggested tags found.
     """
-    action: str = "tag_suggest"
+    action: str = 'tag_suggest'
     payload: dict[str, str] = {
-        "url": dest_url,
+        'url': dest_url,
     }
 
-    logger.debug(f"fetching suggested tags for : {dest_url}")
+    logger.debug(f'fetching suggested tags for : {dest_url}')
 
     try:
         response: httpx.Response = linkhut_api_call(action=action, payload=payload)
@@ -212,20 +217,22 @@ def get_tags_suggestion(dest_url: str) -> str:
         response_dict: list[dict[str, list[str]]] = response.json()
 
         if status_code == 200:
-            tag_list: list[str] = response_dict[0]["popular"] + response_dict[1]["recommended"]
+            tag_list: list[str] = (
+                response_dict[0]['popular'] + response_dict[1]['recommended']
+            )
             if len(tag_list) > 0:
-                return ",".join(tag_list)
+                return ','.join(tag_list)
             else:
-                logger.warning(f"No auto tag suggestions found for: {dest_url}")
-                return "AutoTagFetchFailed"
+                logger.warning(f'No auto tag suggestions found for: {dest_url}')
+                return 'AutoTagFetchFailed'
         else:
-            logger.warning("Issue with the API. Auto Tag Fetch Failed.")
-            return "AutoTagFetchFailed"
+            logger.warning('Issue with the API. Auto Tag Fetch Failed.')
+            return 'AutoTagFetchFailed'
 
     except Exception as e:
         # if there is a network error or the API is down, we handle that in the following exception.
-        logger.error(f"Error fetching tags for {dest_url}: {e}")
-        return "AutoTagFetchFailed"
+        logger.error(f'Error fetching tags for {dest_url}: {e}')
+        return 'AutoTagFetchFailed'
 
 
 def encode_url(url: str) -> str:
@@ -238,18 +245,18 @@ def encode_url(url: str) -> str:
         str: The encoded URL.
     """
     return (
-        url.replace(":", "%3A")
-        .replace("/", "%2F")
-        .replace("?", "%3F")
-        .replace("&", "%26")
-        .replace("=", "%3D")
-        .replace("\\", "%5C")
+        url.replace(':', '%3A')
+        .replace('/', '%2F')
+        .replace('?', '%3F')
+        .replace('&', '%26')
+        .replace('=', '%3D')
+        .replace('\\', '%5C')
     )
 
 
 def tags_in_api_format(tags: list[Tag]) -> str:
-        """Return tags in string format separated by +"""
-        return "+".join(tag.name for tag in tags)
+    """Return tags in string format separated by +"""
+    return '+'.join(tag.name for tag in tags)
 
 
 # def verify_url(url: str) -> bool:
@@ -319,9 +326,9 @@ def tags_in_api_format(tags: list[Tag]) -> str:
 #     return True
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # Example usage
-    dest_url = "http://news.ycombinator.com"
+    dest_url = 'http://news.ycombinator.com'
     # dest_url_base = dest_url.split("?")[0]
 
     # print(f"Title info: {get_link_title(dest_url)}")
