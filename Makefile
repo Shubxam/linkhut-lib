@@ -1,5 +1,6 @@
 # Makefile for easy development workflows.
-# GitHub Actions call uv directly.
+# See docs/development.md for docs.
+# Note GitHub Actions call uv directly, not this Makefile.
 
 # A phony target is a target that is not a file. It is used to define commands that should always be executed, regardless of whether a file with the same name exists.
 # This is useful for commands like `make clean`, `make install`, etc., which do not produce an output file.
@@ -48,11 +49,18 @@ check:
 	uv run ruff format src/ --check
 	uv run ty check src/
 
+# Check-only lint, matching CI (does not modify files).
+lint-check:
+	uv run python devtools/lint.py --check
 # Clean build artifacts
 clean:
-	rm -rf build/ dist/ *.egg-info/ .pytest_cache/ .ruff_cache/ .venv/
-	find . -name "*.pyc" -delete
-	find . -name "__pycache__" -type d -exec rm -rf {} +
+	-rm -rf dist/
+	-rm -rf *.egg-info/
+	-rm -rf .pytest_cache/
+	-rm -rf .ruff_cache/
+	-rm -rf .mypy_cache/
+	-rm -rf .venv/
+	-find . -type d -name "__pycache__" -exec rm -rf {} +
 
 # Build package
 build: clean

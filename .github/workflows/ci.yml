@@ -7,6 +7,11 @@ on:
     branches: [main]
 
 env:
+  # Supply-chain cool-off: only consider releases older than this, so CI never
+  # resolves packages too new to have been vetted. uv (>= 0.9, and the version
+  # pinned below) accepts a relative duration directly. See the Supply Chain
+  # Hardening section in docs/development.md.
+  UV_EXCLUDE_NEWER: "14 days"
   UV_SYSTEM_PYTHON: 1
 
 jobs:
@@ -14,14 +19,24 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.13"]
-
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Checkout (official GitHub action)
+        # Pinned to a full, immutable version tag (see supply-chain notes in
+        # docs/development.md); bump deliberately when updating.
+        uses: actions/checkout@v6.0.2
         with:
+          # Important for versioning plugins:
+          fetch-depth: 0
+
+      - name: Install uv (official Astral action)
+        # Pinned to a full, immutable version tag. As of v8, setup-uv no longer
+        # publishes floating major/minor tags (e.g. `@v8`), so bump this exact
+        # version when updating.
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          # Update this as needed:
+          version: "0.11.17"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
@@ -31,22 +46,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --dev --frozen
 
-      - name: Lint (ruff check)
-        run: uv run ruff check src/ tests/ devtools/
-
-      - name: Format check (ruff format)
-        run: uv run ruff format src/ tests/ devtools/ --check
-
-      - name: Type check (ty)
-        run: uv run ty check src/
-
-      - name: Spell check (codespell)
-        run: uv run codespell --write-changes src/ tests/ devtools/
-
-      - name: Security scan (bandit)
-        run: uv run bandit -c pyproject.toml -r src/ tests/ devtools/
+      - name: Run linting
+        # Check-only mode so CI fails on unformatted code instead of fixing it.
+        run: uv run python devtools/lint.py --check
 
       - name: Test
         run: uv run pytest

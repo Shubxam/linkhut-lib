@@ -1,9 +1,11 @@
 # Changes here will be overwritten by Copier. Do not edit manually.
-_commit: v0.2.20
+_commit: v0.3.0
 _src_path: gh:jlevy/simple-modern-uv
 package_author_email: shubxam@gmail.com
 package_author_name: Shubham Soni
 package_description: Python library for interacting with LinkHut bookmarking service API
 package_github_org: shubxam
+package_license: MIT
 package_module: linkhut_lib
 package_name: linkhut-lib
+publish_to_pypi: true

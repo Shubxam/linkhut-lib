@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 
@@ -40,11 +41,14 @@ Repository = "https://github.com/shubxam/linkhut-lib"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3.5",
-    "ruff>=0.11.0",
-    "codespell>=2.4.1",
-    "ty>=0.0.1a10",
-    "bandit>=1.8.5",
+    "pytest>=9.0.3",
+    "pytest-sugar>=1.1.1",
+    "ruff>=0.15.15",
+    "codespell>=2.4.2",
+    "ty>=0.0.51",
+    "rich>=15.0.0",
+    "basedpyright>=1.39.6",
+    "bandit>=1.9.4",
     "funlog>=0.2.1",
 ]
 
@@ -74,6 +78,12 @@ packages = ["src/linkhut_lib"]
 
 # ---- Settings ----
 
+[tool.uv]
+# Fail fast on old uv versions rather than misbehave. 0.9 is the floor where
+# UV_EXCLUDE_NEWER accepts a relative duration like "14 days" (used in CI for the
+# supply-chain cool-off; see docs/development.md).
+required-version = ">=0.9"
+
 [tool.ruff]
 line-length = 88
 indent-width = 4
@@ -97,9 +107,9 @@ select = [
     "B", # https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
     "I", # https://docs.astral.sh/ruff/rules/#isort-i
     # Other possibilities:
-    # "D" # https://docs.astral.sh/ruff/rules/#pydocstyle-d
-    # "Q" # https://docs.astral.sh/ruff/rules/#flake8-quotes-q
-    # "COM" # https://docs.astral.sh/ruff/rules/#flake8-commas-com
+    # "D", # https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    # "Q", # https://docs.astral.sh/ruff/rules/#flake8-quotes-q
+    # "COM", # https://docs.astral.sh/ruff/rules/#flake8-commas-com
     # "SIM", # https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
 ]
 ignore = [
