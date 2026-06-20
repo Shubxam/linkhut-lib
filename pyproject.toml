@@ -28,6 +28,7 @@ classifiers = [
 keywords = ["bookmark-manager", "bookmarks", "api", "library"]
 
 dependencies = [
+    "beautifulsoup4>=4.13.4",
     "dotenv>=0.9.9",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
@@ -36,8 +37,6 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/shubxam/linkhut-lib"
-# Homepage = "https://..."
-# Documentation = "https://..."
 
 [project.optional-dependencies]
 dev = [
@@ -50,6 +49,7 @@ dev = [
     "basedpyright>=1.39.6",
     "bandit>=1.9.4",
     "funlog>=0.2.1",
+    "pre-commit>=4.2.0",
 ]
 
 # ---- Build system ----
@@ -59,7 +59,7 @@ requires = ["hatchling >= 1.26", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-source = "vcs"  # infer version from VCS (git, hg, etc.)
+source = "vcs"
 fallback-version = "0.1.0"
 
 [tool.uv-dynamic-versioning]
@@ -69,14 +69,12 @@ bump = "true"
 fallback-version = "0.1.0"
 
 [tool.hatch.build.targets.sdist]
-# Specify the packages to include in the source distribution
 packages = ["src/linkhut_lib"]
 
 [tool.hatch.build.targets.wheel]
-# Specify the packages to include in the wheel distribution
 packages = ["src/linkhut_lib"]
 
-# ---- Settings ----
+# ---- Ruff: Linter and Formatter ----
 
 [tool.uv]
 # Fail fast on old uv versions rather than misbehave. 0.9 is the floor where
@@ -85,79 +83,145 @@ packages = ["src/linkhut_lib"]
 required-version = ">=0.9"
 
 [tool.ruff]
+target-version = "py313"
 line-length = 88
 indent-width = 4
 
 [tool.ruff.format]
-quote-style = "single"  # use single quotes for strings.
-indent-style = "space"  # indent with spaces, rather than tabs.
-skip-magic-trailing-comma = false  # respect magic trailing commas.
-line-ending = "auto"  # automatically detect the appropriate line ending.
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = 66
 
 [tool.ruff.lint]
-fixable = ["ALL"]  # fix all fixable issues
-unfixable = []  # issues to not fix
+fixable = ["ALL"]
+unfixable = []
 
 select = [
-    # See: https://docs.astral.sh/ruff/rules/
-    # Basic list from: https://docs.astral.sh/ruff/linter/#rule-selection
-    "E", # https://docs.astral.sh/ruff/rules/#error-e
-    "F", # https://docs.astral.sh/ruff/rules/#pyflakes-f
-    "UP", # https://docs.astral.sh/ruff/rules/#pyupgrade-up
-    "B", # https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
-    "I", # https://docs.astral.sh/ruff/rules/#isort-i
-    # Other possibilities:
-    # "D", # https://docs.astral.sh/ruff/rules/#pydocstyle-d
-    # "Q", # https://docs.astral.sh/ruff/rules/#flake8-quotes-q
-    # "COM", # https://docs.astral.sh/ruff/rules/#flake8-commas-com
-    # "SIM", # https://docs.astral.sh/ruff/rules/#flake8-simplify-sim
-]
-ignore = [
-    # Disable some rules that are overly pedantic. Add/remove as desired:
-    "E501", # https://docs.astral.sh/ruff/rules/line-too-long/
-    "E402", # https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file/
-    "E731", # https://docs.astral.sh/ruff/rules/lambda-assignment/
-    # We use both ruff formatter and linter so some rules should always be disabled.
-    # See: https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
-    "W191", # https://docs.astral.sh/ruff/rules/tab-indentation/
-    "E111", # https://docs.astral.sh/ruff/rules/indentation-with-invalid-multiple/
-    "E114", # https://docs.astral.sh/ruff/rules/indentation-with-invalid-multiple-comment/
-    "E117", # https://docs.astral.sh/ruff/rules/over-indented/
-    "D206", # https://docs.astral.sh/ruff/rules/docstring-tab-indentation/
-    "D300", # https://docs.astral.sh/ruff/rules/triple-single-quotes/
-    "Q000", # https://docs.astral.sh/ruff/rules/bad-quotes-inline-string/
-    "Q001", # https://docs.astral.sh/ruff/rules/bad-quotes-multiline-string/
-    "Q002", # https://docs.astral.sh/ruff/rules/bad-quotes-docstring/
-    "Q003", # https://docs.astral.sh/ruff/rules/avoidable-escaped-quote/
-    "COM812", # https://docs.astral.sh/ruff/rules/missing-trailing-comma/
-    "COM819", # https://docs.astral.sh/ruff/rules/prohibited-trailing-comma/
-    "ISC002", # https://docs.astral.sh/ruff/rules/multi-line-implicit-string-concatenation/
+    # === Core (always on) ===
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes — undefined names, unused imports
+    "UP",   # pyupgrade — modernize Python syntax
+    "B",    # flake8-bugbear — bug-prone patterns
+    "I",    # isort — import sorting
+
+    # === Style & Naming ===
+    "N",    # pep8-naming — naming conventions
+    "SIM",  # flake8-simplify — simpler expressions
+    "RET",  # flake8-return — consistent return statements
+
+    # === Safety & Correctness ===
+    "RUF",  # ruff-specific rules
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie — misc simplifications
+    "SLF",  # private access — warn on private member access
+    "A",    # flake8-builtins — warn on shadowing builtins
+    "EM",   # flake8-errmsg — descriptive error messages
+    "G",    # flake8-logging-format — proper logging calls
+    "LOG",  # flake8-logging — warn on root-logger usage
+
+    # === Performance ===
+    "PERF", # performance — detect inefficient patterns
+
+    # === Cleanup ===
+    "ARG",  # flake8-unused-arguments
+    "FURB", # refurb — general cleanup
+    "ERA",  # eradicate — commented-out code
+    "TD",   # flake8-todos — enforce TODO formatting
+
+    # === Imports ===
+    "INT",  # flake8-import-conventions
+    "FA",   # flake8-future-annotations
+
+    # === Testing ===
+    "PT",   # flake8-pytest-style
+
+    # === Debugging ===
+    "T20",  # flake8-print — warn on print statements
 ]
 
+ignore = [
+    # Conflicts with formatter
+    "E501", "E402", "E731",
+    "W191", "E111", "E114", "E117",
+    "D206", "D300",
+    "Q000", "Q001", "Q002", "Q003",
+    "COM812", "COM819",
+    "ISC002",
+    # Too pedantic
+    "N818",   # exception-name-suffix
+    "SIM114", # if-else-block-instead-of-if-exp
+    "TD002",  # missing-author-in-todo
+    "TD003",  # missing-issue-link-in-todo
+    "EM101",  # raw-string-in-exception
+    "EM102",  # f-string-in-exception
+    "PERF203", # try-except-in-loop
+    "SLF001",  # private-member-access — needed for pydantic
+    "ARG001",  # unused-function-argument — needed for callbacks
+    "ARG002",  # unused-method-argument — needed for overrides
+    "FA100",   # from __future__ import annotations
+    "PT011",   # pytest-raises-too-broad
+    "PT012",   # pytest-raises-with-multiple-statements
+    "PT018",   # pytest-composite-assertion
+    "G004",    # logging-f-string — loguru handles this
+    "LOG001",  # logging-not-lazy — loguru pattern
+    "LOG009",  # logging-string-format — loguru pattern
+    "FURB113", # reimplemented-starmap
+    "FURB118", # operator-replacements
+    "FURB140", # reimplemented-any-all
+    "RUF012",  # mutable-class-default — pydantic handles this
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+    "F401",  # unused-import — re-exports
+    "F403",  # star-imports — from X import *
+]
+"devtools/*" = [
+    "T20",   # allow print in devtools
+]
+"tests/*" = [
+    "T20",   # allow print in tests
+    "SLF001", # allow private member access
+    "ARG001", # allow unused args in fixtures
+    "ARG002",
+]
+
+
+[tool.ruff.lint.flake8-import-conventions]
+[tool.ruff.lint.flake8-import-conventions.aliases]
+"typing" = "t"
+
+# ---- Codespell ----
+
 [tool.codespell]
-ignore-words-list = "IST,ist"  # ignore common misspellings
-skip = "*.ipynb,*.csv,NIFTY_500_live_sentiment.html,*.yml"  # files to skip
-write-changes = false  # whether to correct misspellings
+ignore-words-list = "IST,ist"
+skip = "*.ipynb,*.csv,*.yml,*.lock"
+write-changes = false
+
+# ---- Pytest ----
 
 [tool.pytest.ini_options]
 python_files = ["*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-testpaths = [
-    "src",
-    "tests",
-]
+testpaths = ["src", "tests"]
+
+# ---- Bandit (Security) ----
 
 [tool.bandit]
-# See: https://bandit.readthedocs.io/en/latest/config.html
-# use `# nosec issue-code` to ignore specific issues in code
-# Specify the directories to scan for security issues
-targets = [
-    "src",
-    "tests",
-    "devtools",
-]
-skips = ["B101", "B601"]  # don't alert for these specified issues
+targets = ["src", "tests", "devtools"]
+skips = ["B101", "B601"]
 
 [tool.bandit.assert_used]
-skips = ['*_test.py', 'test_*.py']  # remove assert statement warnings from tests.
+skips = ['*_test.py', 'test_*.py']
+
+# ---- Ty (Type Checker) ----
+# Note: ty is pre-release (0.0.x) and its config schema is unstable.
+# Once it stabilizes, configure [tool.ty] here. For now we rely on defaults.
+
+[dependency-groups]
+dev = []

@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.13", "3.14"]
     steps:
       - name: Checkout (official GitHub action)
         # Pinned to a full, immutable version tag (see supply-chain notes in

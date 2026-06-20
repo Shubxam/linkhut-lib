@@ -24,3 +24,14 @@ wheels/
 
 # env files
 .env
+
+# macOS metadata
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Jupyter notebook checkpoints
+notebooks/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
