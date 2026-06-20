@@ -24,6 +24,4 @@ def validate_date(cls, datetime_obj: datetime | str | date) -> datetime:
         datetime_object: datetime = datetime.fromisoformat(datetime_obj.isoformat())
     else:
         raise TypeError('Date must be a datetime object or an ISO formatted string.')
-    # if datetime_object > datetime.now(UTC):
-    #     raise ValueError("Date cannot be in the future.")
     return datetime_object

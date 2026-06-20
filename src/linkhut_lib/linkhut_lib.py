@@ -5,7 +5,7 @@ This module provides functions for managing bookmarks and tags through the LinkH
 including creating, updating, listing and deleting bookmarks, as well as managing tags.
 """
 
-# todo: standardize error codes and messages across all functions
+# TODO: standardize error codes and messages across all functions
 
 import json
 import sys
@@ -83,11 +83,6 @@ def get_bookmarks(
         if url:
             # TODO: Add URL encoding
             # no need to validate URL format here if user has imported the bookmark file, not all URLs will have http:// or https://
-            # try:
-            #     utils.verify_url(url)
-            # except ValueError as e:
-            #     logger.error(f"Invalid URL format for {url}: {e}")
-            #     return [{"error": "invalid_url_format"}]
             fields['url'] = url
     else:
         # Default behavior: get recent 15 posts
@@ -101,16 +96,15 @@ def get_bookmarks(
     if fetched_bookmarks:
         logger.debug('Bookmarks fetched successfully')
         return fetched_bookmarks
-    elif (
+    if (
         response.json().get('result_code') == 'something went wrong'
         or not fetched_bookmarks
     ):
         # result code "something went wrong" indicates posts/get endpoint was called with wrong url
         logger.warning('No Bookmarks Found')
         raise BookmarkNotFoundError('No bookmarks found for the given criteria')
-    else:
-        logger.warning('No bookmarks found for the given criteria')
-        raise BookmarkNotFoundError('No bookmarks found for the given criteria')
+    logger.warning('No bookmarks found for the given criteria')
+    raise BookmarkNotFoundError('No bookmarks found for the given criteria')
 
 
 def create_bookmark(
@@ -187,9 +181,8 @@ def create_bookmark(
     if status_code == 200 and response_dict.get('result_code') == 'done':
         logger.debug(f'Bookmark created successfully: {response_dict}')
         return fields
-    else:
-        logger.warning(f'Failed to create bookmark: {response_dict}')
-        raise BookmarkExistsError('Bookmark already exists or creation failed')
+    logger.warning(f'Failed to create bookmark: {response_dict}')
+    raise BookmarkExistsError('Bookmark already exists or creation failed')
 
 
 def update_bookmark(
@@ -267,10 +260,7 @@ def update_bookmark(
             private: bool = current_private
 
         # Determine to_read setting
-        if new_to_read is not None:
-            final_toread = new_to_read
-        else:
-            final_toread = current_toread
+        final_toread = new_to_read if new_to_read is not None else current_toread
 
         # Check if no actual changes are needed
         if (
@@ -296,7 +286,7 @@ def update_bookmark(
             updated_tags = f'{tags} {new_tag}'.strip() if new_tag else tags
             updated_note = f'{note} {new_note}'.strip() if new_note else note
 
-        bookmark_meta = create_bookmark(
+        return create_bookmark(
             url=url,
             title=title,
             tags=updated_tags,
@@ -306,12 +296,8 @@ def update_bookmark(
             fetch_tags=False,
             to_read=final_toread,
         )
-        return bookmark_meta
-    else:
-        logger.debug('Unexpected bookmark format received. Missing required fields.')
-        raise RequestError(
-            'Unexpected bookmark format received. Missing required fields.'
-        )
+    logger.debug('Unexpected bookmark format received. Missing required fields.')
+    raise RequestError('Unexpected bookmark format received. Missing required fields.')
 
 
 def get_reading_list(count: int = 5) -> list[dict[str, str]]:
@@ -366,13 +352,12 @@ def delete_bookmark(url: str) -> dict[str, str]:
     if result_code == 'done':
         logger.debug(f'Bookmark with URL {url} successfully deleted.')
         return {'bookmark_deletion': 'success'}
-    else:
-        logger.error(
-            f'Unable to delete bookmark with URL {url}. Result code: {result_code}'
-        )
-        raise BookmarkNotFoundError(
-            f'Unable to delete bookmark with URL {url}. Bookmark may not exist.'
-        )
+    logger.error(
+        f'Unable to delete bookmark with URL {url}. Result code: {result_code}'
+    )
+    raise BookmarkNotFoundError(
+        f'Unable to delete bookmark with URL {url}. Bookmark may not exist.'
+    )
 
 
 def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
@@ -403,16 +388,15 @@ def rename_tag(old_tag: str, new_tag: str) -> dict[str, str]:
     if result_code == 'done':
         logger.info(f"Tag '{old_tag}' successfully renamed to '{new_tag}'.")
         return {'tag_renaming': 'success'}
-    else:
-        logger.error(
-            f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
-        )
-        raise RequestError(
-            f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
-        )
+    logger.error(
+        f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
+    )
+    raise RequestError(
+        f"Failed to rename tag '{old_tag}' to '{new_tag}'. Result code: {result_code}"
+    )
 
 
-# todo: #20 update error handling for delete_tag, rename_tag
+# TODO: #20 update error handling for delete_tag, rename_tag
 def delete_tag(tag: str) -> dict[str, str]:
     """
     Delete a tag from all bookmarks.
@@ -439,54 +423,9 @@ def delete_tag(tag: str) -> dict[str, str]:
     if result_code == 'done':
         logger.debug(f"Tag '{tag}' successfully deleted.")
         return {'tag_deletion': 'success'}
-    else:
-        logger.error(
-            f"Failed to delete tag '{tag}'. Tag doesn't exist. Result code: {result_code}"
-        )
-        raise RequestError(
-            f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}"
-        )
-
-
-# def get_tags() -> List[Dict[str, Any]]:
-#     """
-#     Get all tags and their counts.
-
-#     Returns:
-#         List[Dict[str, Any]]: List of tags with counts
-#     """
-#     api_endpoint = "/v1/tags"
-#     fields = {}
-
-#     response = utils.linkhut_api_call(api_endpoint=api_endpoint, fields=fields)
-
-#     return response
-
-
-if __name__ == '__main__':
-    # Example usage
-    # These examples show how to use the library functions directly
-    # Uncomment any of these lines to test the functionality
-
-    url = 'https://huggingface.co'
-    # title = "Example Title"
-    # note = "This is a note."
-    # tags = ["tag1", "tag2"]
-
-    # 1. Create a new bookmark
-    create_bookmark(url=url)
-
-    # 2. Mark a bookmark as to-read
-    # reading_list_toggle(url, to_read=True, tags=['MCP'])
-
-    # 3. Update a bookmark's privacy setting
-    # update_bookmark(url=url, private=False)
-
-    # 4. Delete a bookmark
-    # delete_bookmark(url)
-
-    # 5. List bookmarks with a specific tag
-    # print(get_bookmarks(tag=["blog"]))
-
-    # 6. Show reading list
-    # get_reading_list(count=5)
+    logger.error(
+        f"Failed to delete tag '{tag}'. Tag doesn't exist. Result code: {result_code}"
+    )
+    raise RequestError(
+        f"Failed to delete tag '{tag}'. Tag may not exist. Result code: {result_code}"
+    )

@@ -102,17 +102,15 @@ class Bookmark(BaseModel):
                 return []
             tags_list: list[str] = tags.replace(',', ' ').replace(';', ' ').split()
             return [Tag(name=tag) for tag in set(tags_list)]  # remove duplicates
-        elif isinstance(tags, list):
+        if isinstance(tags, list):
             if all(isinstance(tag, str) for tag in tags):
                 return [Tag(name=tag) for tag in set(tags)]  # type: ignore
-            elif all(isinstance(tag, Tag) for tag in set(tags)):
+            if all(isinstance(tag, Tag) for tag in set(tags)):
                 return tags  # type: ignore
-            else:
-                raise InvalidTagFormatError('Mixed tag types not allowed.')
-        else:
-            raise InvalidTagFormatError(
-                'Tags must be a string of space/comma/semicolon separated values, list of strings, or list of Tags.'
-            )
+            raise InvalidTagFormatError('Mixed tag types not allowed.')
+        raise InvalidTagFormatError(
+            'Tags must be a string of space/comma/semicolon separated values, list of strings, or list of Tags.'
+        )
 
     @field_validator('created_at', mode='before')
     @classmethod

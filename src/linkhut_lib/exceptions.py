@@ -1,31 +1,21 @@
 class LinkHutError(Exception):
     """Base exception for all LinkHut operations"""
 
-    pass
-
 
 class InvalidURLError(LinkHutError):
     """Raised when URL format is invalid"""
-
-    pass
 
 
 class BookmarkNotFoundError(LinkHutError):
     """Raised when bookmark doesn't exist"""
 
-    pass
-
 
 class InvalidDateFormatError(LinkHutError):
     """Raised when date format is invalid"""
 
-    pass
-
 
 class InvalidTagFormatError(LinkHutError):
     """Raised when tag format is invalid"""
-
-    pass
 
 
 class RequestError(LinkHutError):
@@ -49,5 +39,3 @@ class RequestError(LinkHutError):
 
 class BookmarkExistsError(LinkHutError):
     """Raised when trying to create a bookmark that already exists"""
-
-    pass

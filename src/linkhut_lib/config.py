@@ -4,11 +4,8 @@ Configuration settings for the LinkHut and LinkPreview APIs.
 This module contains the base URLs and header templates for making API requests.
 The actual API keys are inserted into these templates at runtime.
 """
-# TODO: make use of ENUMs and TypeAlias and Dataclasses
 
 from enum import Enum
-
-# from typing import TypeAlias
 
 # LinkHut API configuration
 LINKHUT_HEADER: dict[str, str] = {
@@ -17,22 +14,12 @@ LINKHUT_HEADER: dict[str, str] = {
 }
 LINKHUT_BASEURL: str = 'https://api.ln.ht'
 
-# LinkHut API endpoints
-LINKHUT_API_ENDPOINTS: dict[str, str] = {
-    'bookmark_get': '/v1/posts/get',
-    'bookmark_recent': '/v1/posts/recent',
-    'bookmark_create': '/v1/posts/add',
-    'bookmark_delete': '/v1/posts/delete',
-    'tag_suggest': '/v1/posts/suggest',
-    'tag_delete': '/v1/tags/delete',
-    'tag_rename': '/v1/tags/rename',
-}
-
 firefox_user_agent: str = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:139.0) Gecko/20100101 Firefox/139.0'
 
 
-class LH_API_ENDPOINT(Enum):
-    """Enum-like class for LinkHut API endpoints."""
+# TODO(#1): rename to CapWords (e.g. LinkHutEndpoint) when callers are updated.
+class LH_API_ENDPOINT(Enum):  # noqa: N801
+    """LinkHut API endpoint paths."""
 
     BOOKMARK_GET = '/v1/posts/get'
     BOOKMARK_RECENT = '/v1/posts/recent'
