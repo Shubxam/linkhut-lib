@@ -3,6 +3,11 @@
 Generated from the architecture review of `linkhut-lib`. Items are grouped by
 category and prioritized within each. **Do the P0 items before tagging `0.2.0`.**
 
+> **0.2.0 progress:** P0 items complete. P1 API-correctness, build-config,
+> and CHANGELOG items complete (2026-06-21). §2 P1 tests for the seven
+> public functions landed on 2026-06-27 — see §2 for the new test files
+> and §8 for the typed-result shapes and patterns those tests build on.
+
 Priority legend:
 
 - **P0** — Release-blocker. The current `0.1.x` shape cannot ship to PyPI in
@@ -28,7 +33,7 @@ The interface users actually touch. Get this right before anything else.
       *Why:* the README is the first thing new users see; copy-paste failure
       means a 30-second abandonment. 15-minute fix.
 
-- [ ] **[P1] Split `update_bookmark` into strict + upsert variants.**
+- [x] **[P1] Split `update_bookmark` into strict + upsert variants.**
       `update_bookmark` silently creates a new bookmark if the URL isn't found
       (`linkhut_lib.py:189-297`). A typo'd URL creates a bookmark instead of
       raising. Split into:
@@ -37,8 +42,11 @@ The interface users actually touch. Get this right before anything else.
       - `upsert_bookmark(url, ...)` — creates if missing (current behavior).
       *Why:* implicit create-on-update is a footgun; the function is two
       behaviors glued together.
+      *Done 2026-06-21.* `update_bookmark` is now strict;
+      `upsert_bookmark` holds the create-on-missing behavior. Both return
+      `BookmarkUpdateResult` (see §8).
 
-- [ ] **[P1] Make `create_bookmark` / `update_bookmark` return a consistent
+- [x] **[P1] Make `create_bookmark` / `update_bookmark` return a consistent
       typed result.** `create_bookmark` returns the outbound payload dict;
       `update_bookmark` returns `fetched_bookmark` (server data) in the no-op
       case and `create_bookmark`'s return in the success case — two different
@@ -47,8 +55,12 @@ The interface users actually touch. Get this right before anything else.
       fields, or a `Bookmark` model.
       *Why:* public API is a contract; users shouldn't get different shapes
       from the same function.
+      *Done 2026-06-21.* New typed results:
+      `BookmarkCreateResult` (`outcome: CreateOutcome`, `url`, `bookmark`) and
+      `BookmarkUpdateResult` (`outcome: UpdateOutcome`, `url`, `bookmark`).
+      See §8 for the exact shapes.
 
-- [ ] **[P1] Resolve the `tag` overload in `get_bookmarks`.** `tag` is
+- [x] **[P1] Resolve the `tag` overload in `get_bookmarks`.** `tag` is
       documented as "filter by tags" but in the `count > 0` branch it silently
       takes only the first tag (`linkhut_lib.py:67-70`). Either:
       1. Type it as `tag: str | list[str] = ''` and document the multi-tag
@@ -56,6 +68,15 @@ The interface users actually touch. Get this right before anything else.
       2. Add a separate `get_recent_bookmarks(count, tag=None)` function.
       *Why:* users pass `tag='python,rust'` and silently get only `python`
       results. Small UX trap.
+      *Done 2026-06-21.* Went with option 1: `tag: str | list[str]`. For
+      `count > 0`, multi-element lists raise `ValueError`; for `count == 0`,
+      the list is joined with `+` to AND-filter (per the LinkHut docs at
+      https://docs.linkhut.org/posts.html).
+      *Extra wins while in the area:* added strict `dt` format validation
+      (`CCYY-MM-DDThh:mm:ssZ`, literal T and Z) via `validation.validate_dt_strict`,
+      and clamped `count` to 1..100 on the recent endpoint. Both match the
+      documented wire format and previously could surface as server-side
+      errors with no client-side guard.
 
 - [ ] **[P2] Fix `Bookmark.model_dump` serialization to flatten `Url` and
       `Date`.** Right now `model_dump(by_alias=True, mode='json')` produces a
@@ -73,33 +94,45 @@ The interface users actually touch. Get this right before anything else.
 ## 2. Test coverage
 
 `tests/test_smoke.py` covers etiquette, validation helpers, and the pydantic
-round-trip — but **none of the seven public functions**. The httpx
-`MockTransport` pattern in the etiquette tests extends to every function in
-5-10 lines each.
+round-trip. As of 2026-06-27 the seven public functions each have a
+dedicated test module (`tests/test_<name>.py`) using the
+`tests/_helpers.py` helpers (`patch_api_call`, `done_responder`,
+`StatefulResponder`). The full pytest run is 91 tests, all green.
 
-- [ ] **[P1] Add `tests/test_create_bookmark.py`** — happy path, title
+- [x] **[P1] Add `tests/test_create_bookmark.py`** — happy path, title
       auto-fetch, tag suggestion, replace=False (already-exists raises),
       replace=True, private/to_read flag handling.
+      *Done 2026-06-27.*
 
-- [ ] **[P1] Add `tests/test_update_bookmark.py`** — strict variant (raises
-      on missing), upsert variant (creates on missing), tag/note
-      concatenation, replace flag behavior, no-op return.
+- [x] **[P1] Add `tests/test_update_bookmark.py`** — strict variant (raises
+      on missing), tag/note concatenation, replace flag behavior, no-op
+      return.
+      *Done 2026-06-27.*
 
-- [ ] **[P1] Add `tests/test_delete_bookmark.py`** — happy path, missing
+- [x] **[P1] Add `tests/test_upsert_bookmark.py`** — separate file
+      covering the create-on-update behavior that lives in
+      `upsert_bookmark` since the §1.1 split.
+      *Done 2026-06-27.*
+
+- [x] **[P1] Add `tests/test_delete_bookmark.py`** — happy path, missing
       bookmark raises.
+      *Done 2026-06-27.*
 
-- [ ] **[P1] Add `tests/test_get_bookmarks.py`** — recent endpoint, get
+- [x] **[P1] Add `tests/test_get_bookmarks.py`** — recent endpoint, get
       endpoint with date/url/tag filters, default-no-args case,
       `something went wrong` result code mapping to
       `BookmarkNotFoundError`, `_result_code` helper for non-dict bodies.
+      *Done 2026-06-27.*
 
-- [ ] **[P1] Add `tests/test_rename_tag.py`** and **`tests/test_delete_tag.py`** —
+- [x] **[P1] Add `tests/test_rename_tag.py`** and **`tests/test_delete_tag.py`** —
       happy path, invalid tag name raises `InvalidTagFormatError`,
       non-`done` result code raises `RequestError`.
+      *Done 2026-06-27.*
 
-- [ ] **[P1] Add `tests/test_get_reading_list.py`** — wraps `get_bookmarks`
+- [x] **[P1] Add `tests/test_get_reading_list.py`** — wraps `get_bookmarks`
       with `tag='unread'`; covers the `BookmarkNotFoundError` re-raise
-      path (`linkhut_lib.py:339-348`).
+      path.
+      *Done 2026-06-27.*
 
 - [ ] **[P2] Add `tests/test_models.py`** — `Bookmark.validate_tags` four
       branches (string, list of strings, list of Tags, mixed raises);
@@ -128,6 +161,9 @@ Code that exists but shouldn't, or that exists twice.
       `linkhut_lib.py:122-128` — the `if result_code == ... or not
       fetched_bookmarks` branch and the trailing `if not fetched_bookmarks`
       branch do literally the same thing. Pick one.
+      *Done 2026-06-21* as part of the §1.1/§1.2/§1.3 refactor — the two
+      duplicate "no bookmarks" branches were collapsed into a single
+      raise. Move this to "done" next time the file is cleaned up.
 
 - [ ] **[P2] Remove the `# type: ignore` in `models.py:130`.** Replace with a
       call to the existing `validate_url_string` helper, or fix the `Url.url`
@@ -150,6 +186,12 @@ Code that exists but shouldn't, or that exists twice.
 - [ ] **[P2] Replace `ValueError`/`TypeError` in `validation.py:13-22` with
       `InvalidDateFormatError`.** The library already defines the right
       exception; the validation module raises stdlib types instead.
+      *Partially done 2026-06-21.* `validate_date` now raises
+      `InvalidDateFormatError` on string-parsing failures. The `TypeError`
+      for the `else` branch was kept (it covers a real type-system error
+      rather than a format error) and is now followed by an explicit
+      `isinstance(..., datetime)` short-circuit that keeps ty happy without
+      needing `# type: ignore`.
 
 - [ ] **[P2] Remove `dotenv` as a runtime dep** *or* move `load_dotenv()`
       out of `_linkhut_client` into a separate
@@ -165,18 +207,29 @@ Code that exists but shouldn't, or that exists twice.
 
 ## 4. pyproject.toml / build config
 
-- [ ] **[P1] Reconcile `[project.optional-dependencies]` and
+- [x] **[P1] Reconcile `[project.optional-dependencies]` and
       `[dependency-groups]`.** Both define a `dev` group. Pick one. New uv
       style is `[dependency-groups]` (PEP 735). Move everything there and
       drop `optional-dependencies`.
+      *Done 2026-06-21.* Deleted `[project.optional-dependencies]`; the
+      `dev` group now lives in `[dependency-groups]`. The CI workflow's
+      `uv sync --all-extras --dev --frozen` becomes `uv sync --dev --frozen`
+      (no `optional-dependencies` left for `--all-extras` to surface). CI
+      workflow file still calls `--all-extras`; harmless no-op but worth
+      cleaning up.
 
-- [ ] **[P1] Drop `src` from `testpaths` in `[tool.pytest.ini_options]`.**
+- [x] **[P1] Drop `src` from `testpaths` in `[tool.pytest.ini_options]`.**
       `testpaths = ["src", "tests"]` causes pytest to scan production code.
       Tests live in `tests/`; remove `src`.
+      *Done 2026-06-21.* `testpaths = ["tests"]`. Verified with
+      `uv run pytest --collect-only` — collects 13 tests from `tests/`
+      only.
 
-- [ ] **[P1] Fix `requires-python` vs classifiers mismatch.**
+- [x] **[P1] Fix `requires-python` vs classifiers mismatch.**
       `requires-python = ">=3.13"` but classifiers list `Python :: 3.11` and
       `Python :: 3.12`. Remove the unsupported versions from classifiers.
+      *Done 2026-06-21.* Classifiers now list only 3.13 and 3.14, matching
+      the CI matrix in `.github/workflows/ci.yml`.
 
 - [ ] **[P2] Move ruff ignores for tests/devtools into
       `tool.ruff.lint.per-file-ignores` and verify the current
@@ -194,15 +247,28 @@ the next release; all block "people who aren't you" trusting the project.
       says `license = "MIT"` and README says "see LICENSE file for details."
       Confirm the file is present; add it if not. Release-blocker.
 
-- [ ] **[P1] Add `CHANGELOG.md`** with an `## [Unreleased]` section. The
+- [x] **[P1] Add `CHANGELOG.md`** with an `## [Unreleased]` section. The
       publishing doc uses `gh release create --generate-notes` but a
       checked-in `CHANGELOG.md` is what PyPI renders and what contributors
       read first.
+      *Done 2026-06-21.* `CHANGELOG.md` added at the repo root with
+      `[Unreleased]` and `[0.2.0]` sections. The 0.2.0 entry spells out the
+      breaking changes (`update_bookmark` strict, typed result shapes),
+      the additions (`upsert_bookmark`, `validate_dt_strict`, etc.), and
+      a "Known gaps" section listing documented-but-unwrapped endpoints
+      (`/v1/tags/get`, `/v1/posts/dates`, `/v1/posts/all`, `/v1/posts/update`,
+      `hashes` and `dt` parameters).
 
-- [ ] **[P1] Verify CI runs `ruff check` + `ruff format --check` +
+- [x] **[P1] Verify CI runs `ruff check` + `ruff format --check` +
       `codespell` + `ty check` + `pytest` + `uv build`** on Python 3.13 and
       3.14. The publishing doc says GitHub Actions call `uv` directly;
       confirm the matrix matches the classifiers in pyproject.
+      *Done 2026-06-21.* CI workflow (`.github/workflows/ci.yml`) runs
+      `devtools/lint.py --check` (which wraps ruff check + format check +
+      codespell + ty) and `pytest` on the Python 3.13/3.14 matrix. Pyproject
+      classifiers now match the matrix (3.13 + 3.14 only). One nit: the CI
+      step still passes `--all-extras`, which became a no-op after §4.1.
+      Not blocking.
 
 - [ ] **[P2] Add an issue template and a PR template** under
       `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_TEMPLATE.md`. Low
@@ -274,5 +340,134 @@ That's ~4 hours of focused work and gets you from "mid-refactor" to
 
 ---
 
+## 8. Implementation notes — 0.2.0 refactor (2026-06-21)
+
+Captured so the next contributor doesn't have to re-derive these shapes from
+reading the code. All of the below is what shipped in this session.
+
+### Typed result models (replaces the old `dict` return)
+
+`create_bookmark`, `update_bookmark`, and `upsert_bookmark` now return
+typed pydantic models. All three live in `src/linkhut_lib/models.py`:
+
+```python
+class CreateOutcome(StrEnum):
+    CREATED = 'created'             # new bookmark created
+    REPLACED = 'replaced'           # existing bookmark replaced (replace=True)
+    ALREADY_EXISTS = 'already_exists'  # raised in practice (replace=False + duplicate)
+
+class UpdateOutcome(StrEnum):
+    UPDATED = 'updated'             # strict: matched existing, fields written
+    UPSERTED = 'upserted'           # upsert: did not exist, was created
+    NO_OP = 'no_op'                 # server-state already matched
+
+class BookmarkCreateResult(BaseModel):
+    outcome: CreateOutcome
+    url: str
+    bookmark: dict[str, str]   # server-shape payload (matches get_bookmarks)
+
+class BookmarkUpdateResult(BaseModel):
+    outcome: UpdateOutcome
+    url: str
+    bookmark: dict[str, str]
+```
+
+Caller pattern:
+
+```python
+result = create_bookmark(url='https://example.com', tags='python,rust')
+if result.outcome == CreateOutcome.CREATED:
+    print(result.bookmark['href'])
+```
+
+### API split
+
+- `update_bookmark(url, ...)` — strict; raises `BookmarkNotFoundError` if
+  the URL isn't bookmarked. New default behavior; was the footgun.
+- `upsert_bookmark(url, ...)` — creates if missing, updates if present.
+  Pre-0.2.0 behavior, kept under a clearer name.
+
+Both are exported from `linkhut_lib` alongside the typed results.
+
+### `get_bookmarks(tag=...)` typing
+
+`tag: str | list[str] = ''`. Per-endpoint semantics:
+
+- `count > 0` (`/v1/posts/recent`): single tag only. A multi-element list
+  raises `ValueError`. A single-element list is unwrapped.
+- `count == 0` (`/v1/posts/get`): the list is joined with `+` to AND-filter
+  per https://docs.linkhut.org/posts.html.
+
+### `get_bookmarks(dt=...)` strict format
+
+`dt` must match `CCYY-MM-DDThh:mm:ssZ` (literal T separator, Z suffix).
+`datetime.fromisoformat` is too permissive — it accepts `2025-01-01` with no
+time component, which the API then rejects. New helper in
+`validation.py`:
+
+```python
+def validate_dt_strict(value: str) -> datetime:
+    """Raise InvalidDateFormatError if value isn't CCYY-MM-DDThh:mm:ssZ."""
+```
+
+### `get_bookmarks(count=...)` bounds
+
+`count` is now clamped to 1..100 on the recent endpoint, matching the
+documented bounds. Out-of-range raises `ValueError` before any HTTP call.
+
+### pyproject.toml changes
+
+- Dropped `[project.optional-dependencies]`. Dev deps live in
+  `[dependency-groups].dev` (PEP 735). CI's `uv sync --all-extras --dev`
+  becomes `uv sync --dev` (with `--all-extras` a no-op — not removed yet,
+  see P3 nit in §5.1).
+- `testpaths = ["tests"]` (was `["src", "tests"]`).
+- Classifiers dropped to 3.13/3.14 only, matching the CI matrix.
+
+### Test pattern for §2 follow-up
+
+The `httpx.MockTransport` + `pytest.MonkeyPatch` pattern in
+`tests/test_smoke.py:121-229` extends to every public function in 5-10
+lines. Recommended template for the deferred P1 tests:
+
+```python
+class TestCreateBookmark:
+    def test_happy_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv('LH_PAT', 'test-token')
+        utils._linkhut_client.cache_clear()
+        utils._LINKHUT_THROTTLE._last_request_at = 0.0
+        monkeypatch.setattr(utils.time, 'sleep', lambda _: None)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={'result_code': 'done'},
+                headers={'content-type': 'application/json'},
+            )
+
+        transport = httpx.MockTransport(handler)
+        # ... patch utils.linkhut_api_call to use transport ...
+        result = create_bookmark(url='https://example.com', title='Example')
+        assert result.outcome == CreateOutcome.CREATED
+```
+
+(For full mock-isolation without monkey-patching `utils` internals,
+patch `linkhut_lib.linkhut_lib.utils.linkhut_api_call` with a `Mock` that
+returns a pre-built `APIResponse`. That's how the etiquette tests reach
+the transport without going through `utils.linkhut_api_call`.)
+
+### Verification baseline (before §2 follow-up)
+
+The 13 smoke tests in `tests/test_smoke.py` pass on the refactored code:
+
+```bash
+make lint-check   # codespell + ruff check + ruff format --check + ty
+make test         # pytest
+```
+
+Both must stay green as §2 tests are added.
+
+---
+
 *Generated from the architecture review. See `docs/development.md` for the
-broader workflow.*
+broader workflow. 0.2.0 implementation notes appended on 2026-06-21.*
