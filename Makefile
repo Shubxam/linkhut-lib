@@ -2,7 +2,7 @@
 # See docs/development.md for docs.
 # Note GitHub Actions call uv directly, not this Makefile.
 
-.PHONY: help install dev-setup upgrade test lint format check typecheck security clean build pre-commit
+.PHONY: help install dev-setup upgrade test lint format check typecheck clean build pre-commit
 
 .DEFAULT_GOAL := help
 
@@ -12,10 +12,9 @@ help:
 	@echo "  dev-setup      - Complete development setup"
 	@echo "  upgrade        - Upgrade dependencies"
 	@echo "  test           - Run tests"
-	@echo "  lint           - Run linter (ruff check + codespell + bandit)"
+	@echo "  lint           - Run linter (ruff check + codespell)"
 	@echo "  format         - Run formatter (ruff format)"
 	@echo "  typecheck      - Run type checker (ty)"
-	@echo "  security       - Run security scanner (bandit)"
 	@echo "  check          - Run all quality checks"
 	@echo "  pre-commit     - Run pre-commit hooks on all files"
 	@echo "  clean          - Clean build artifacts"
@@ -42,7 +41,7 @@ format:
 	uv run ruff format src/ tests/ devtools/
 
 typecheck:
-	uv run ty check src/
+	uv run ty check src tests
 
 # Check-only lint, matching CI (does not modify files).
 lint-check:

@@ -1,14 +1,18 @@
+"""Pydantic models for the LinkHut API and bookmark payloads."""
+
 from datetime import datetime
-from typing import Any
+from enum import StrEnum
 
 from bs4 import BeautifulSoup
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, Json, field_validator
 
 from .exceptions import InvalidTagFormatError
 from .validation import validate_date, validate_tag
 
 
 class Tag(BaseModel):
+    """A single bookmark tag."""
+
     name: str = Field(
         ...,
         description='The name of the tag',
@@ -23,10 +27,13 @@ class Tag(BaseModel):
         return validate_tag(name)
 
     def __str__(self) -> str:
+        """Return the tag's name string."""
         return self.name
 
 
 class Date(BaseModel):
+    """A bookmark date/time field."""
+
     date: datetime = Field(
         default_factory=datetime.now,
         description='The date and time',
@@ -36,21 +43,42 @@ class Date(BaseModel):
     @classmethod
     def validate_date(cls, date: datetime | str) -> datetime:
         """Ensure date is a valid datetime object or string."""
-        return validate_date(cls, date)
+        return validate_date(date)
 
     def __str__(self) -> str:
+        """Return the date in ISO 8601 format."""
         return self.date.isoformat()
 
 
 class Url(BaseModel):
+    """A bookmark URL with Pydantic validation."""
+
     model_config = ConfigDict(populate_by_name=True)
     url: HttpUrl = Field(..., description='The URL of the bookmark', frozen=True)
 
     def __str__(self) -> str:
+        """Return the URL string (with any normalization, e.g. trailing slash)."""
         return str(self.url)
 
 
+def validate_url_string(url: str) -> Url:
+    """Validate a raw URL string and return a `Url` model.
+
+    Pydantic's `HttpUrl` is stricter than `str`, so constructing it from a
+    string needs an explicit conversion. The `# type: ignore` lives here
+    instead of at every call site.
+    """
+    # `HttpUrl` requires an explicit coercion from `str`; Pydantic accepts the
+    # dict form without complaint, and ty narrows the input naturally.
+    return Url.model_validate({'url': url})
+
+
 class Bookmark(BaseModel):
+    """A LinkHut bookmark with URL, title, tags, notes, and metadata.
+
+    Field aliases match the LinkHut API payload keys (href, description, etc.).
+    """
+
     # without this, the model will not be able to use field names only alias names
     model_config = ConfigDict(populate_by_name=True)
 
@@ -115,14 +143,17 @@ class Bookmark(BaseModel):
     @field_validator('created_at', mode='before')
     @classmethod
     def validate_created_at(cls, created_at: datetime) -> Date:
+        """Wrap a raw datetime in the Date pydantic model."""
         return Date(date=created_at)
 
     @field_validator('url', mode='before')
     @classmethod
     def validate_url(cls, url: str) -> Url:
+        """Wrap a raw URL string in the Url pydantic model."""
         return Url(url=url)  # type: ignore
 
     def __str__(self) -> str:
+        """Return a human-readable multi-line bookmark summary."""
         bookmark = f"""
         Bookmark(title={self.title}
         url={self.url.__str__()}
@@ -140,21 +171,17 @@ class HTMLResponse(BaseModel):
 
     content_soup: BeautifulSoup = Field(..., description='Parsed HTML content')
 
-    @field_validator('content_soup')
-    @classmethod
-    def validate_content(cls, content: BeautifulSoup) -> BeautifulSoup:
-        """Ensure content is a BeautifulSoup object."""
-        if not isinstance(content, BeautifulSoup):
-            raise TypeError('Content must be a string or a BeautifulSoup object.')
-        return content
-
 
 class APIResponse(BaseModel):
-    """Response model for JSON API responses."""
+    """Response model for JSON API responses.
 
-    content_json: dict[str, Any] | list[dict[str, Any]] = Field(
-        ..., description='Structured JSON response data'
-    )
+    `content_json` is a `pydantic.Json` value, so anything JSON-serializable
+    is accepted on input and the parsed Python value (dict / list / scalar)
+    is what callers read. Consumers should still narrow the shape themselves
+    based on the endpoint that produced the response.
+    """
+
+    content_json: Json = Field(..., description='Structured JSON response data')
 
 
 class GETResponse(BaseModel):
@@ -166,3 +193,51 @@ class GETResponse(BaseModel):
     data: HTMLResponse | APIResponse = Field(
         ..., description='Response data based on content type'
     )
+
+
+class UpdateOutcome(StrEnum):
+    """Discriminator for the path an `update_bookmark` call took."""
+
+    UPDATED = 'updated'
+    """Strict: bookmark matched, fields written."""
+    UPSERTED = 'upserted'
+    """Upsert: bookmark did not exist, was created."""
+    NO_OP = 'no_op'
+    """No field changes were necessary; existing state already matched."""
+
+
+class CreateOutcome(StrEnum):
+    """Discriminator for the path a `create_bookmark` call took."""
+
+    CREATED = 'created'
+    """New bookmark created."""
+    REPLACED = 'replaced'
+    """Existing bookmark replaced (replace=True)."""
+    ALREADY_EXISTS = 'already_exists'
+    """Existing bookmark left untouched (replace=False; raises in practice)."""
+
+
+class BookmarkCreateResult(BaseModel):
+    """Typed return value of `create_bookmark`.
+
+    `bookmark` is the server-shape payload dict so callers can read fields
+    directly without re-parsing the API response. Kept as a dict (not a
+    `Bookmark` model) to match the existing `get_bookmarks` shape and avoid
+    forcing a wire-format round-trip.
+    """
+
+    outcome: CreateOutcome = Field(..., description='Which path the call took.')
+    url: str = Field(..., description='The bookmarked URL.')
+    bookmark: dict[str, str] = Field(..., description='Server-shape bookmark payload.')
+
+
+class BookmarkUpdateResult(BaseModel):
+    """Typed return value of `update_bookmark` and `upsert_bookmark`.
+
+    Same shape for strict and upsert callers; `outcome` distinguishes the
+    paths. `UPSERTED` is only ever produced by `upsert_bookmark`.
+    """
+
+    outcome: UpdateOutcome = Field(..., description='Which path the call took.')
+    url: str = Field(..., description='The bookmarked URL.')
+    bookmark: dict[str, str] = Field(..., description='Server-shape bookmark payload.')

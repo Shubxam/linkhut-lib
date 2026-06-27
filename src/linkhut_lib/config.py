@@ -1,5 +1,4 @@
-"""
-Configuration settings for the LinkHut and LinkPreview APIs.
+"""Configuration settings for the LinkHut and LinkPreview APIs.
 
 This module contains the base URLs and header templates for making API requests.
 The actual API keys are inserted into these templates at runtime.
@@ -17,8 +16,7 @@ LINKHUT_BASEURL: str = 'https://api.ln.ht'
 firefox_user_agent: str = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:139.0) Gecko/20100101 Firefox/139.0'
 
 
-# TODO(#1): rename to CapWords (e.g. LinkHutEndpoint) when callers are updated.
-class LH_API_ENDPOINT(Enum):  # noqa: N801
+class LinkHutEndpoint(Enum):
     """LinkHut API endpoint paths."""
 
     BOOKMARK_GET = '/v1/posts/get'

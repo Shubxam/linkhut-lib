@@ -11,10 +11,12 @@ This project uses [uv](https://docs.astral.sh/uv/) for Python and dependency man
 The `Makefile` wraps the common commands:
 
 ```bash
-make install     # uv sync --all-extras (install all deps into .venv)
-make lint        # auto-format and lint: codespell, ruff check --fix, ruff format, basedpyright
+make install     # uv sync (install runtime deps into .venv)
+make dev-setup   # uv sync --all-extras --dev + editable install
+make lint        # auto-format and lint: codespell, ruff check --fix, ruff format, ty
 make lint-check  # check-only variant, matching CI (fails instead of fixing)
 make test        # uv run pytest
+make typecheck   # uv run ty check src tests
 make build       # uv build (wheel + sdist)
 ```
 
@@ -25,14 +27,14 @@ Or call uv directly: `uv run pytest tests/test_foo.py`, `uv add some-package`,
 
 - **Layout**: `src/` layout; code in `src/linkhut_lib/`, tests in `tests/`.
 
-- **Python**: 3.11+ only; use modern typing (full annotations, no `from __future__`).
+- **Python**: 3.13+ only; use modern typing (full annotations, no `from __future__`).
 
-- **Lint/format**: ruff (line length 100) plus codespell; type checking is
-  [basedpyright](https://docs.basedpyright.com/). Settings live in `pyproject.toml`. Run
-  `make lint` before committing.
+- **Lint/format**: ruff (line length 88) plus codespell and bandit. Type checking
+  is [ty](https://docs.astral.sh/ty/) (Astral's alpha checker). Settings live in
+  `pyproject.toml`. Run `make lint` before committing.
 
 - **Dependencies**: add with `uv add` (runtime) or `uv add --dev` (dev).
-  Commit `uv.lock`. Don’t use pip, poetry, or requirements.txt.
+  Commit `uv.lock`. Don't use pip, poetry, or requirements.txt.
 
 - **Versioning**: the version comes from git tags via dynamic versioning; never edit a
   version number in `pyproject.toml`. Releases are published to PyPI by tagging `vX.Y.Z` (see

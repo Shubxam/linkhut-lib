@@ -18,8 +18,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
@@ -38,20 +36,6 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/shubxam/linkhut-lib"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=9.0.3",
-    "pytest-sugar>=1.1.1",
-    "ruff>=0.15.15",
-    "codespell>=2.4.2",
-    "ty>=0.0.51",
-    "rich>=15.0.0",
-    "basedpyright>=1.39.6",
-    "bandit>=1.9.4",
-    "funlog>=0.2.1",
-    "pre-commit>=4.2.0",
-]
-
 # ---- Build system ----
 
 [build-system]
@@ -60,12 +44,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
-fallback-version = "0.1.0"
-
-[tool.uv-dynamic-versioning]
-vcs = "git"
-style = "pep440"
-bump = "true"
 fallback-version = "0.1.0"
 
 [tool.hatch.build.targets.sdist]
@@ -112,6 +90,8 @@ select = [
     "N",    # pep8-naming — naming conventions
     "SIM",  # flake8-simplify — simpler expressions
     "RET",  # flake8-return — consistent return statements
+    "PL",   # pylint subset — too-many-args etc.
+    "FBT",  # flake8-boolean-trap — boolean arg style
 
     # === Safety & Correctness ===
     "RUF",  # ruff-specific rules
@@ -122,6 +102,11 @@ select = [
     "EM",   # flake8-errmsg — descriptive error messages
     "G",    # flake8-logging-format — proper logging calls
     "LOG",  # flake8-logging — warn on root-logger usage
+    "S",    # flake8-bandit — security (replaces bandit)
+    "TRY",  # tryceratops — exception-handling correctness
+
+    # === Documentation ===
+    "D",    # pydocstyle — docstring style (Google convention, see below)
 
     # === Performance ===
     "PERF", # performance — detect inefficient patterns
@@ -173,27 +158,60 @@ ignore = [
     "FURB118", # operator-replacements
     "FURB140", # reimplemented-any-all
     "RUF012",  # mutable-class-default — pydantic handles this
+
+    # flake8-bandit (S) — replaced bandit; mirror its skips
+    "S101",    # assert — bandit B101 was skipped; assert is fine in tests
+    "S601",    # paramiko call — bandit B601 was skipped
+
+    # tryceratops (TRY) — narrow at source where it matters
+    "TRY003",  # long messages in raise (caller-side messages are clearer here)
+    "TRY300",  # try-consider-else — adds flag vars without functional gain
+    "TRY301",  # raise inside try (raise-with-from is fine)
+
+    # pylint (PL) — too pedantic for this client-library API
+    "PLR0913", # too-many-args — client-library signature
+
+    # flake8-boolean-trap (FBT) — boolean kwargs are the right shape for this API
+    "FBT001",  # boolean-arg-in-function-definition
+    "FBT002",  # boolean-default-value-in-function-definition
+    "FBT003",  # boolean-positional-arg-in-function-definition
 ]
+
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = [
     "F401",  # unused-import — re-exports
     "F403",  # star-imports — from X import *
+    "D104",  # missing docstring in public package
 ]
 "devtools/*" = [
     "T20",   # allow print in devtools
+    "S603",  # allow subprocess calls (was annotated # nosec B603 for bandit)
 ]
 "tests/*" = [
     "T20",   # allow print in tests
     "SLF001", # allow private member access
     "ARG001", # allow unused args in fixtures
     "ARG002",
+    "D101",  # missing docstring in public class — test classes are self-documenting
+    "D102",  # missing docstring in public method — test names are the docs
+]
+"src/linkhut_lib/exceptions.py" = [
+    "D100",  # missing docstring in public module — class names are self-documenting
+    "D105",  # missing docstring in magic method — __init__/__str__ are obvious
+    "D107",  # missing docstring in __init__
+]
+"src/linkhut_lib/validation.py" = [
+    "D100",  # missing docstring in public module
 ]
 
 
 [tool.ruff.lint.flake8-import-conventions]
 [tool.ruff.lint.flake8-import-conventions.aliases]
 "typing" = "t"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 # ---- Codespell ----
 
@@ -208,20 +226,37 @@ write-changes = false
 python_files = ["*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-testpaths = ["src", "tests"]
+testpaths = ["tests"]
 
 # ---- Bandit (Security) ----
-
-[tool.bandit]
-targets = ["src", "tests", "devtools"]
-skips = ["B101", "B601"]
-
-[tool.bandit.assert_used]
-skips = ['*_test.py', 'test_*.py']
+# Removed: ruff's `S` (flake8-bandit) family covers the same checks. See
+# [tool.ruff.lint] below.
 
 # ---- Ty (Type Checker) ----
-# Note: ty is pre-release (0.0.x) and its config schema is unstable.
-# Once it stabilizes, configure [tool.ty] here. For now we rely on defaults.
+
+[tool.ty.environment]
+python-version = "3.13"
+root = ["src"]
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.analysis]
+# Test helpers (`tests/_helpers.py`) are imported via `from ._helpers`
+# inside the `tests` package (the `__init__.py` makes pytest treat it as
+# such). ty with `root = ["src"]` doesn't see `tests/` as a package, so
+# the relative import is reported as unresolved. The runtime imports
+# work correctly under pytest, and the helpers are typed enough that
+# test files don't need static type info for them at type-check time.
+allowed-unresolved-imports = ["tests._helpers"]
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=9.0.3",
+    "pytest-sugar>=1.1.1",
+    "ruff>=0.15.15",
+    "codespell>=2.4.2",
+    "ty==0.0.51",
+    "rich>=15.0.0",
+    "pre-commit>=4.2.0",
+]
