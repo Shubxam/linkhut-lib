@@ -60,6 +60,14 @@ packages = ["src/linkhut_lib"]
 # supply-chain cool-off; see docs/development.md).
 required-version = ">=0.9"
 
+# Exempt `ty` from the global UV_EXCLUDE_NEWER cutoff. `ty` is a pre-release
+# (0.0.x) type checker that ships frequent releases, so a 14-day cool-off makes
+# the exact `==0.0.51` pin in [dependency-groups].dev unsatisfiable within
+# days. ty is dev-only (not shipped to PyPI users), so the supply-chain risk
+# of using a fresh release is low. Set to `false` to opt this package out of
+# the global exclude-newer window.
+exclude-newer-package = { ty = false }
+
 [tool.ruff]
 target-version = "py313"
 line-length = 88
