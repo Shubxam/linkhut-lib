@@ -8,6 +8,7 @@ attic/
 
 # Personal scratch notes (not for the repo)
 notes.md
+TODO.md
 
 # Python tool caches
 .ruff_cache/
@@ -38,3 +39,8 @@ wheels/
 # Jupyter notebook checkpoints
 notebooks/.ipynb_checkpoints/
 **/.ipynb_checkpoints/
+
+# test cache
+.pytest_cache/
+
+notebooks/
