@@ -24,7 +24,7 @@ jobs:
       - name: Checkout (official GitHub action)
         # Pinned to a full, immutable version tag (see supply-chain notes in
         # docs/development.md); bump deliberately when updating.
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7
         with:
           # Important for versioning plugins:
           fetch-depth: 0
@@ -41,7 +41,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
