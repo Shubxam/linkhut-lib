@@ -1,17 +1,15 @@
-# this dunder file is used to mark the directory as a Python package
+"""linkhut-lib — Python client for the LinkHut bookmarking API."""
 
-# this import enables the user to access the LinkHut API functions
-# as `from linkhut_lib import create_bookmark`
-# against the `from linkhut_lib.linkhut_lib import create_bookmark`
+from importlib.metadata import PackageNotFoundError, version
 
 from .exceptions import (
-    APIError,
     BookmarkExistsError,
     BookmarkNotFoundError,
     InvalidDateFormatError,
     InvalidTagFormatError,
     InvalidURLError,
     LinkHutError,
+    RequestError,
 )
 from .linkhut_lib import (
     create_bookmark,
@@ -21,22 +19,53 @@ from .linkhut_lib import (
     get_reading_list,
     rename_tag,
     update_bookmark,
+    upsert_bookmark,
 )
+
+# Re-export models so users can do `from linkhut_lib import Bookmark, Tag, Date, Url`.
+from .models import (
+    APIResponse,
+    Bookmark,
+    BookmarkCreateResult,
+    BookmarkUpdateResult,
+    CreateOutcome,
+    Date,
+    HTMLResponse,
+    Tag,
+    UpdateOutcome,
+    Url,
+)
+
+try:
+    __version__: str = version('linkhut-lib')
+except PackageNotFoundError:  # pragma: no cover - editable install fallback
+    __version__ = '0.0.0+unknown'
 
 # all the public symbols defined under __all__ will be available when doing `from linkhut_lib import *`
 __all__: list[str] = [
-    'get_bookmarks',
-    'create_bookmark',
-    'update_bookmark',
-    'get_reading_list',
-    'delete_bookmark',
-    'rename_tag',
-    'delete_tag',
-    'LinkHutError',
-    'InvalidURLError',
+    'APIResponse',
+    'Bookmark',
+    'BookmarkCreateResult',
+    'BookmarkExistsError',
     'BookmarkNotFoundError',
+    'BookmarkUpdateResult',
+    'CreateOutcome',
+    'Date',
+    'HTMLResponse',
     'InvalidDateFormatError',
     'InvalidTagFormatError',
-    'APIError',
-    'BookmarkExistsError',
+    'InvalidURLError',
+    'LinkHutError',
+    'RequestError',
+    'Tag',
+    'UpdateOutcome',
+    'Url',
+    'create_bookmark',
+    'delete_bookmark',
+    'delete_tag',
+    'get_bookmarks',
+    'get_reading_list',
+    'rename_tag',
+    'update_bookmark',
+    'upsert_bookmark',
 ]

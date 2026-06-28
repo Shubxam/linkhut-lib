@@ -1,35 +1,25 @@
 class LinkHutError(Exception):
-    """Base exception for all LinkHut operations"""
-
-    pass
+    """Base exception for all LinkHut operations."""
 
 
 class InvalidURLError(LinkHutError):
-    """Raised when URL format is invalid"""
-
-    pass
+    """Raised when URL format is invalid."""
 
 
 class BookmarkNotFoundError(LinkHutError):
-    """Raised when bookmark doesn't exist"""
-
-    pass
+    """Raised when bookmark doesn't exist."""
 
 
 class InvalidDateFormatError(LinkHutError):
-    """Raised when date format is invalid"""
-
-    pass
+    """Raised when date format is invalid."""
 
 
 class InvalidTagFormatError(LinkHutError):
-    """Raised when tag format is invalid"""
-
-    pass
+    """Raised when tag format is invalid."""
 
 
 class RequestError(LinkHutError):
-    """Raised when API returns an error"""
+    """Raised when API returns an error."""
 
     def __init__(
         self,
@@ -48,6 +38,4 @@ class RequestError(LinkHutError):
 
 
 class BookmarkExistsError(LinkHutError):
-    """Raised when trying to create a bookmark that already exists"""
-
-    pass
+    """Raised when trying to create a bookmark that already exists."""

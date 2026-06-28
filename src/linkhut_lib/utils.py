@@ -1,10 +1,34 @@
-# note: make the order of the return types of functions with api calls consistent.
-# i.e. all the functions which call make_get_request should use `return response.json(), response.status_code`
+"""HTTP helpers for the LinkHut API and arbitrary web-page scraping.
 
-import json
+Note: make the order of the return types of functions with api calls consistent.
+I.e. all the functions which call make_get_request should use `return response.json(), response.status_code`.
+
+LinkHut API etiquette (https://docs.linkhut.org/overview.html#etiquette) is
+enforced below at three points:
+
+  1. **Rate limit.** `_throttle_request` is installed as a `'request'` event
+     hook on the LinkHut client. It sleeps so each request goes out at least
+     `_MIN_INTERVAL_SECONDS` after the previous one.
+
+  2. **500/999 back-off.** `make_get_request` retries once after
+     `_THROTTLE_BACKOFF_SECONDS` when the API returns 500 or 999. Other
+     status codes are not retried — the etiquette says 500/999 specifically
+     mean "you have been throttled."
+
+  3. **User-Agent.** The LinkHut client sets `User-Agent: linkhut-lib/<ver>`
+     with a contact URL so the upstream API can identify this client.
+     Default identifiers (httpx's `python-httpx/X.Y.Z`) tend to get banned.
+
+  4. **No silent URL modification.** This module validates URLs (`Url`,
+     `HttpUrl`) but never rewrites them. The earlier `encode_url` helper
+     was removed for that reason.
+"""
+
 import os
-import sys
-from typing import Literal
+import time
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
@@ -12,85 +36,200 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from .config import (
-    LINKHUT_API_ENDPOINTS,
     LINKHUT_BASEURL,
     LINKHUT_HEADER,
-    LINKPREVIEW_BASEURL,
-    LINKPREVIEW_HEADER,
+    LinkHutEndpoint,
+    firefox_user_agent,
 )
+from .exceptions import RequestError
+from .models import APIResponse, GETResponse, HTMLResponse, Tag
+from .validation import validate_date as _validate_date
+
+# Re-export for callers that want `utils.validate_date(...)` instead of importing
+# from the validation module directly.
+validate_date = _validate_date
 
 
-def setup_logger():
-    logger.remove()
-    logger.add(sys.stderr, colorize=True, level='INFO')
+# Resolve the package version once for the User-Agent header. Mirrors the
+# fallback in `linkhut_lib.__init__` so a missing package metadata (editable
+# installs, etc.) doesn't crash client construction.
+try:
+    _PACKAGE_VERSION: str = version('linkhut-lib')
+except PackageNotFoundError:  # pragma: no cover - editable install fallback
+    _PACKAGE_VERSION = '0.0.0+unknown'
+
+# Etiquette rule 1: minimum spacing between LinkHut API requests.
+_MIN_INTERVAL_SECONDS: float = 1.0
+
+# Etiquette rule 2: wait this long before the single retry on 500/999.
+_THROTTLE_BACKOFF_SECONDS: float = 5.0
 
 
-def get_request_headers(site: Literal['LinkHut', 'LinkPreview']) -> dict[str, str]:
+class _LinkHutThrottle:
+    """Process-wide rate limiter for LinkHut API calls (etiquette rule 1).
+
+    Module-level mutable state kept in an instance attribute rather than a
+    bare `global` so `PLW0603` is happy and the state has a clear home.
     """
-    Load the PAT from environment variables and return the request headers.
+
+    __slots__ = ('_last_request_at',)
+
+    def __init__(self) -> None:
+        self._last_request_at: float = 0.0
+
+    def wait_and_stamp(self) -> None:
+        """Sleep so the next request is ≥ `_MIN_INTERVAL_SECONDS` after the last.
+
+        `time.monotonic` so a wall-clock change can't break the math.
+        """
+        now = time.monotonic()
+        wait = _MIN_INTERVAL_SECONDS - (now - self._last_request_at)
+        if wait > 0:
+            time.sleep(wait)
+        # Stamp after the (possible) sleep, so the *next* call sees this one.
+        self._last_request_at = time.monotonic()
+
+
+_LINKHUT_THROTTLE = _LinkHutThrottle()
+
+
+def _throttle_request(_request: httpx.Request) -> None:
+    """Wait so this request goes out ≥ `_MIN_INTERVAL_SECONDS` after the previous one.
+
+    Installed as an httpx `'request'` event hook on the LinkHut client. The
+    hook fires once per request, immediately before the request leaves the
+    process — so `time.sleep` here is the right place to enforce the
+    etiquette rate limit. The `request` argument is required by httpx's
+    hook signature but unused here.
     """
-    load_dotenv()  # Load environment variables from .env file
+    _LINKHUT_THROTTLE.wait_and_stamp()
 
-    if site == 'LinkHut':
-        pat: str | None = os.getenv('LH_PAT')
-        if not pat:
-            raise RequestError('LH_PAT environment variable not set')
-        header: dict[str, str] = LINKHUT_HEADER
-        # Create a copy of the header and format the PAT into it
-        request_headers: dict[str, str] = header.copy()
-        request_headers['Authorization'] = request_headers['Authorization'].format(
-            PAT=pat
-        )
 
-    elif site == 'LinkPreview':
-        pat: str | None = os.getenv('LINK_PREVIEW_API_KEY')
-        if not pat:
-            raise RequestError('LINK_PREVIEW_API_KEY environment variable not set')
-        header: dict[str, str] = LINKPREVIEW_HEADER
-        # Create a copy of the header and format the PAT into it
-        request_headers: dict[str, str] = header.copy()
-        request_headers['X-Linkpreview-Api-Key'] = request_headers[
-            'X-Linkpreview-Api-Key'
-        ].format(API_KEY=pat)
+# httpx.Timeout separates the four phases so a slow DNS lookup and a slow read
+# can be distinguished in logs and tuned independently. Pool is generous since
+# the clients are reused across requests.
+_LINKHUT_TIMEOUT = httpx.Timeout(10.0, connect=5.0, read=30.0, write=10.0, pool=5.0)
+_SCRAPE_TIMEOUT = httpx.Timeout(10.0, connect=5.0, read=15.0, write=10.0, pool=5.0)
 
-    # logger.debug(f"header for {site} is {request_headers}")
-    return request_headers
+
+@lru_cache(maxsize=1)
+def _linkhut_client() -> httpx.Client:
+    """Return a memoized httpx.Client configured for the LinkHut API.
+
+    Headers and base URL come from `config`; the bearer token is read from
+    `LH_PAT` on first construction so this function is safe to call before
+    the environment is fully loaded — the first real API call is what fails
+    if the token is missing.
+
+    Etiquette compliance wired into this client:
+      - `User-Agent` identifies the library (etiquette rule 3).
+      - `'request'` event hook enforces ≥1s spacing (rule 1).
+      - `HTTPTransport(retries=1)` retries connect-level failures once so a
+        momentary DNS hiccup doesn't surface as a `RequestError`.
+
+    Back-off for 500/999 (etiquette rule 2) is handled in `make_get_request`
+    because retries need to inspect `response.status_code` and re-dispatch
+    through the same content-type path; a `'response'` event hook can't do
+    that without re-reading the body.
+    """
+    load_dotenv()
+    pat = os.getenv('LH_PAT')
+    if not pat:
+        raise RequestError('LH_PAT environment variable not set')
+    headers = LINKHUT_HEADER.copy()
+    headers['Authorization'] = headers['Authorization'].format(PAT=pat)
+    headers['User-Agent'] = (
+        f'linkhut-lib/{_PACKAGE_VERSION} (+https://github.com/shubxam/linkhut-lib)'
+    )
+    transport = httpx.HTTPTransport(retries=1)
+    return httpx.Client(
+        base_url=LINKHUT_BASEURL,
+        headers=headers,
+        timeout=_LINKHUT_TIMEOUT,
+        transport=transport,
+        event_hooks={'request': [_throttle_request]},
+    )
+
+
+@lru_cache(maxsize=1)
+def _scrape_client() -> httpx.Client:
+    """Return a memoized httpx.Client for arbitrary web-page fetches.
+
+    Used by `get_link_meta` to retrieve the title/description for a target
+    URL. No PAT — just a browser-style User-Agent so some servers don't
+    refuse the request as bot traffic.
+
+    Not subject to LinkHut etiquette — this client talks to third-party
+    sites, not to api.ln.ht.
+    """
+    return httpx.Client(
+        headers={'User-Agent': firefox_user_agent},
+        timeout=_SCRAPE_TIMEOUT,
+    )
 
 
 def make_get_request(
-    url: str, header: dict[str, str], payload: dict[str, str] | None = None
+    url: str,
+    client: httpx.Client,
+    payload: dict[str, str] | None = None,
 ) -> GETResponse:
-    """
-    Make a GET request to the specified URL with the provided headers.
+    """Make a GET request through the provided client and return a structured response.
+
+    The caller passes the right client (`_linkhut_client()` for the LinkHut API,
+    `_scrape_client()` for arbitrary pages) so headers, timeouts, and pooling
+    are configured once.
 
     Args:
         url (str): The URL to make the request to.
-        header (dict[str, str]): The headers to include in the request.
+        client (httpx.Client): The client to use for the request.
+        payload (dict[str, str] | None): Optional query parameters for the request.
 
     Returns:
         GETResponse: The structured response object.
 
     Raises:
-        RuntimeError: If the request fails or if the response is not JSON.
-        httpx.HTTPStatusError: If the response status code indicates an error (4xx or 5xx).
-        httpx.RequestError: If there is a network-related error.
-        RequestError: If the content type is not supported or if an unexpected error occurs.
+        RequestError: If
+          - the HTTP response has unknown content-type [not application/json or text/html]
+          - HTTP response has status code 4xx or 5xx
+          - there is a network-related error
+          - an unexpected error occurs during the request.
     """
     try:
         logger.debug(f'making get request to following url: {url}')
-        response = httpx.get(url=url, headers=header, params=payload, timeout=30.0)
-        logger.debug(
-            f'response is {json.dumps(response.json(), indent=2)} with status code {response.status_code}'
-        )
+        if payload is None:
+            payload = {}
+        # For the LinkHut client, `url` is expected to be relative (it's used as
+        # the suffix to base_url). For the scrape client, `url` is absolute.
+        response = client.get(url, params=payload)
+        # Etiquette rule 2: 500/999 mean the API throttled us. Back off once
+        # and retry. Other 4xx/5xx are not retried — they're caller errors,
+        # not throttle signals. The throttle hook still fires for the retry
+        # so we keep ≥1s spacing.
+        if response.status_code in (500, 999):
+            logger.warning(
+                f'LinkHut returned {response.status_code}; '
+                f'backing off {_THROTTLE_BACKOFF_SECONDS}s and retrying once.'
+            )
+            time.sleep(_THROTTLE_BACKOFF_SECONDS)
+            response = client.get(url, params=payload)
+        # Surface 4xx/5xx before parsing the body so JSON-shaped error
+        # responses don't get silently coerced into APIResponse and
+        # masquerade as not-found.
+        response.raise_for_status()
         status_code: int = response.status_code
         request_url: str = response.url.__str__()
         content_type_str: str = response.headers.get('content-type', '')
         if 'application/json' in content_type_str:
             content_type = 'application/json'
-            data = APIResponse(content=response.json())
+            # pydantic.Json accepts raw bytes/strings and parses to a Python
+            # value on validation. Don't pre-parse with `response.json()` —
+            # the field rejects Python dicts (it expects JSON-encoded input).
+            data = APIResponse(content_json=response.content)
         elif 'text/html' in content_type_str:
             content_type = 'text/html'
-            data = HTMLResponse(content=BeautifulSoup(response.text, 'html.parser'))
+            data = HTMLResponse(
+                content_soup=BeautifulSoup(response.text, 'html.parser')
+            )
         else:
             raise RequestError(
                 f"Unsupported content type: {content_type_str}. Expected 'application/json' or 'text/html'."
@@ -121,87 +260,110 @@ def make_get_request(
         raise RequestError(f'An unexpected error occurred: {e}') from e
 
 
-def linkhut_api_call(action: str, payload: dict[str, str]) -> httpx.Response:
-    """
-    Make an API call to the specified LinkHut endpoint and return the response.
+def linkhut_api_call(action: LinkHutEndpoint, payload: dict[str, str]) -> APIResponse:
+    """Make an API call to the specified LinkHut endpoint and return the response.
 
     Args:
         action (str): The API action to perform (e.g., "bookmark_create")
         payload (dict[str, str], optional): Query parameters for the request
 
     Returns:
-        Response: The response object from the API
+        Response: The response object containing the API response data.
+
+    Raises:
+        RequestError: If
+          - the HTTP GET Response has unknown content-type [not application/json or text/html]
+          - HTTP response has status code 4xx or 5xx
+          - there is a network-related error
+          - an unexpected error occurs during the request.
+
     """
     # Note: Different API endpoints return different data, let the calling function handle the extraction and exception handling.
     # calling functions will define how to handle the exception and the replacement values to use if http request fails.
-    url: str = LINKHUT_BASEURL + LINKHUT_API_ENDPOINTS[action]
-
-    # Add query parameters if provided
-    if payload:
-        url += '?'
-        params: list[str] = []
-        for key, value in payload.items():
-            params.append(f'{key}={value}')
-        url += '&'.join(params)
-
-    header: dict[str, str] = get_request_headers(site='LinkHut')
-    logger.debug(f'making request to {url} with header {header}')
-    response: httpx.Response = make_get_request(url=url, header=header)
-    return response
+    client = _linkhut_client()
+    url: str = action.value  # relative; client.base_url resolves it
+    logger.debug(
+        f'making request to {client.base_url}{url} with header {client.headers}'
+    )
+    response: GETResponse = make_get_request(url=url, client=client, payload=payload)
+    if not isinstance(response.data, APIResponse):
+        raise RequestError(f'Expected APIResponse but got {type(response.data)}')
+    return response.data
 
 
-def get_link_title(dest_url: str) -> str:
-    """
-    Fetch the title of a link using the LinkPreview API.
+def get_link_meta(dest_url: str) -> tuple[str, str]:
+    """Fetch the url metadata.
+
     Args:
-        dest_url (str): The URL of the link to fetch the title for.
+        dest_url (str): The URL to fetch the title for.
 
     Returns:
         - str: The title of the link.
+        - description: The description of the link.
 
-    Note: returns url as title if the request fails.
+
+    Note: If title fetching fails due to network errors or access restrictions,
+      returns the URL as the title.
     """
-    # verify_url(dest_url)
-    title: str
-    dest_url_str: str = f'q={dest_url}'
-
-    # fetch the following fields: title, description, url (disabling, as setting custom fields is supported but does not work with the API)
-    # fields_str = "fields=title,description,url"
-
-    # allow websites with blocked content
-    block_content: str = 'block_content=false'
-
-    api_endpoint: str = f'/?{block_content}&{dest_url_str}'
-    request_url: str = LINKPREVIEW_BASEURL + api_endpoint
-
-    logger.debug(f'making request to get title : {request_url}')
-
-    header: dict[str, str] = get_request_headers('LinkPreview')
+    logger.debug(f'making request to get title : {dest_url}')
 
     try:
-        response: httpx.Response = make_get_request(url=request_url, header=header)
-        title_str: str = response.json().get('title', '')
-        title = title_str if title_str else dest_url
-    except Exception as e:
-        logger.error(f'Error fetching the title for {dest_url}: {e}')
-        title = dest_url
+        client = _scrape_client()
+        response: GETResponse = make_get_request(url=dest_url, client=client)
+        if not isinstance(response.data, HTMLResponse):
+            logger.error(
+                f'Expected HTMLResponse but got {type(response.data)} for URL: {dest_url}'
+            )
+            return dest_url, ''
 
-    # function is supposed to send link title, so we send link title by handling the exceptions here.
-    return title
+        # Extract the title from the HTML content
+        soup: BeautifulSoup = response.data.content_soup  # type: ignore[attr-defined]
+
+        # use the open graph title and description if available.
+        # `select_one` returns `Tag | None` (so `.get` is valid); `find` is
+        # typed as `PageElement | None` in BeautifulSoup's stubs, which would
+        # require a suppression on `.get`.
+        og_title_tag = soup.select_one('meta[property="og:title"]')
+        open_graph_title: str = (
+            str(og_title_tag.get('content', '')) if og_title_tag is not None else ''
+        )
+        og_desc_tag = soup.select_one('meta[property="og:description"]')
+        open_graph_description: str = (
+            str(og_desc_tag.get('content', '')) if og_desc_tag is not None else ''
+        )
+
+        # Fallback to the HTML title if Open Graph title is not available
+        title_tag = soup.select_one('title')
+        html_title: str = title_tag.text.strip() if title_tag is not None else ''
+
+        title: str = open_graph_title or html_title or dest_url
+        desc: str = open_graph_description or ''
+
+        # function is supposed to send link title, so we send link title by handling the exceptions here.
+        return title, desc
+    except httpx.RequestError as e:
+        logger.warning(f'Network error while fetching title for {dest_url}: {e}')
+        return dest_url, ''
+    except (KeyError, AttributeError, TypeError) as e:
+        # Title extraction can hit unexpected shape mismatches in third-party
+        # HTML; surface the error but fall back to the URL rather than crash.
+        logger.error(f'An error occurred while fetching title for {dest_url}: {e}')
+        return dest_url, ''
 
 
-def get_tags_suggestion(dest_url: str) -> str:
-    """
-    Fetch tags suggestion for a link using the LinkHut API.
+def get_tags_suggestion(dest_url: str) -> list[Tag]:
+    """Fetch tags suggestion for a link using the LinkHut API.
+
     Args:
         dest_url (str): The URL of the link to fetch tags for.
 
     Returns:
-        str: A str of suggested tags separated by comma.
+        list[Tag]: A list of suggested `Tag` objects (empty on failure).
 
-    Note: returns "AutoTagFetchFailed" if the request fails or no suggested tags found.
+    Note: returns an empty list if the request fails or no suggested tags
+    are found.
     """
-    action: str = 'tag_suggest'
+    action: LinkHutEndpoint = LinkHutEndpoint.TAG_SUGGEST
     payload: dict[str, str] = {
         'url': dest_url,
     }
@@ -209,129 +371,35 @@ def get_tags_suggestion(dest_url: str) -> str:
     logger.debug(f'fetching suggested tags for : {dest_url}')
 
     try:
-        response: httpx.Response = linkhut_api_call(action=action, payload=payload)
-        # above call will always return a response (200) except in case of network error or API down.
-        # if no tags are found, it will return an empty dict.
-
-        status_code: int = response.status_code
-        response_dict: list[dict[str, list[str]]] = response.json()
-
-        if status_code == 200:
-            tag_list: list[str] = (
-                response_dict[0]['popular'] + response_dict[1]['recommended']
+        response: APIResponse = linkhut_api_call(action=action, payload=payload)
+        body: Any = response.content_json
+        if not isinstance(body, list):
+            logger.warning(
+                f'Unexpected tag suggestion response shape for {dest_url}: {body!r}'
             )
-            if len(tag_list) > 0:
-                return ','.join(tag_list)
-            else:
-                logger.warning(f'No auto tag suggestions found for: {dest_url}')
-                return 'AutoTagFetchFailed'
-        else:
-            logger.warning('Issue with the API. Auto Tag Fetch Failed.')
-            return 'AutoTagFetchFailed'
-
-    except Exception as e:
-        # if there is a network error or the API is down, we handle that in the following exception.
-        logger.error(f'Error fetching tags for {dest_url}: {e}')
-        return 'AutoTagFetchFailed'
-
-
-def encode_url(url: str) -> str:
-    """
-    Encode the URL for use in API calls.
-    Args:
-        url (str): The URL to encode.
-
-    Returns:
-        str: The encoded URL.
-    """
-    return (
-        url.replace(':', '%3A')
-        .replace('/', '%2F')
-        .replace('?', '%3F')
-        .replace('&', '%26')
-        .replace('=', '%3D')
-        .replace('\\', '%5C')
-    )
+            return []
+        tags: list[Tag] = []
+        # ty 0.0.x doesn't narrow the type of `body` from `Any` to `list[...]`
+        # through the isinstance check above, so we work directly off `body`
+        # and use a single-element bind.
+        popular: list[str] = (
+            body[0].get('popular', []) if body and isinstance(body[0], dict) else []
+        )
+        recommended: list[str] = (
+            body[1].get('recommended', [])
+            if len(body) > 1 and isinstance(body[1], dict)
+            else []
+        )
+        tags.extend(Tag(name=tag) for tag in popular)
+        tags.extend(Tag(name=tag) for tag in recommended)
+        return tags
+    except RequestError as e:
+        # if there is a network error or the API is down, we handle that in the
+        # following exception.
+        logger.warning(f'Failed to fetch tags for {dest_url}: {e}')
+        return []
 
 
 def tags_in_api_format(tags: list[Tag]) -> str:
-    """Return tags in string format separated by +"""
+    """Return tags in string format separated by +."""
     return '+'.join(tag.name for tag in tags)
-
-
-# def verify_url(url: str) -> bool:
-#     """
-#     Verify if the URL is valid.
-#     Args:
-#         url (str): The URL to verify.
-
-#     Returns:
-#         bool: True if the URL is valid, False otherwise.
-
-#     Raises:
-#         InvalidURLError: If the URL format is invalid.
-#     """
-#     # todo: make url validation better, also check for pattern *://*.*
-#     if not url.startswith(("http://", "https://")):
-#         raise InvalidURLError("URL must start with http:// or https://")
-#     elif len(url) > 2048:
-#         raise InvalidURLError("URL length exceeds 2048 characters")
-
-#     return True
-
-
-# def is_valid_date(date_str: str) -> bool:
-#     """
-#     Check if the given string is a valid date in YYYY-MM-DD format.
-
-#     Args:
-#         date_str (str): The date string to validate.
-
-#     Returns:
-#         bool: True if the date is valid, False otherwise.
-
-#     Raises:
-#         InvalidDateFormatError: If the date format is invalid.
-#     """
-#     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
-#     result = bool(re.match(date_pattern, date_str))
-#     if not result:
-#         raise InvalidDateFormatError(
-#             f"Invalid date format: {date_str}. Expected format is YYYY-MM-DD."
-#         )
-#     return result
-
-
-# def is_valid_tag(tag: str) -> bool:
-#     """
-#     Check if the given string is a valid tag.
-
-#     Args:
-#         tag (str): The tag string to validate.
-
-#     Returns:
-#         bool: True if the tag is valid, False otherwise.
-
-#     Raises:
-#         InvalidTagFormatError: If the tag format is invalid.
-#     """
-#     if not tag:
-#         raise InvalidTagFormatError("Tag cannot be empty")
-#     if len(tag) > 50:
-#         raise InvalidTagFormatError(f"Tag '{tag}' exceeds maximum length of 50 characters")
-#     if not all(c.isalnum() or c in "-_" for c in tag):
-#         raise InvalidTagFormatError(
-#             f"Tag '{tag}' contains invalid characters. Only alphanumeric, hyphen, and underscore are allowed"
-#         )
-#     return True
-
-
-if __name__ == '__main__':
-    # Example usage
-    dest_url = 'http://news.ycombinator.com'
-    # dest_url_base = dest_url.split("?")[0]
-
-    # print(f"Title info: {get_link_title(dest_url)}")
-    # print(f"Tags suggestion: {get_tags_suggestion(dest_url_base)}")
-    # print(f"verify url: {verify_url(dest_url)}")
-    print(encode_url("\n Now I've read this"))

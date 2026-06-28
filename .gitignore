@@ -6,6 +6,9 @@ trash/
 attic/
 .kash/
 
+# Personal scratch notes (not for the repo)
+notes.md
+
 # Python tool caches
 .ruff_cache/
 
@@ -24,3 +27,14 @@ wheels/
 
 # env files
 .env
+
+# macOS metadata
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Jupyter notebook checkpoints
+notebooks/.ipynb_checkpoints/
+**/.ipynb_checkpoints/

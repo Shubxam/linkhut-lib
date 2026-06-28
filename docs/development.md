@@ -77,9 +77,11 @@ extensions:
 
 - [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 
-- [Based Pyright](https://marketplace.visualstudio.com/items?itemName=detachhead.basedpyright)
-  for type checking. Note that this extension works with non-Microsoft VSCode forks like
-  Cursor.
+- [ty](https://marketplace.visualstudio.com/items?itemName=astral-sh.ty) for
+  type checking. Note that this extension works with non-Microsoft VSCode forks
+  like Cursor. (ty is in pre-release; if you prefer a more stable checker, you
+  can use the Pylance / basedpyright extensions instead — neither is required
+  by CI.)
 
 ## Supply Chain Hardening
 
@@ -108,8 +110,7 @@ See [publishing.md](publishing.md) for instructions on publishing to PyPI.
 ## Documentation
 
 - [uv docs](https://docs.astral.sh/uv/)
-
-- [basedpyright docs](https://docs.basedpyright.com/latest/)
+- [ty docs](https://docs.astral.sh/ty/)
 
 * * *
 
