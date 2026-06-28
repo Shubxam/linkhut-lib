@@ -1,7 +1,8 @@
 """Tests for `upsert_bookmark` (create-on-update variant).
 
-Pre-0.2.0, `update_bookmark` had implicit create-on-update behavior. That
-behavior now lives in `upsert_bookmark` so the strict path is the default.
+Before `linkhut-lib 0.1.0`, `update_bookmark` had implicit
+create-on-update behavior. That behavior now lives in
+`upsert_bookmark` so the strict path is the default.
 """
 
 from __future__ import annotations

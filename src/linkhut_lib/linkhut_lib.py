@@ -3,7 +3,7 @@
 This module provides functions for managing bookmarks and tags through the LinkHut API,
 including creating, updating, listing and deleting bookmarks, as well as managing tags.
 
-API correctness notes (0.2.0):
+API correctness notes (linkhut-lib 0.1.0):
 
   - `update_bookmark` is now STRICT: it raises `BookmarkNotFoundError` when
     the URL is not already bookmarked. The previous implicit create-on-update
@@ -399,8 +399,9 @@ def upsert_bookmark(
 ) -> BookmarkUpdateResult:
     """Create-on-update: create the bookmark if it doesn't exist, else update it.
 
-    This is the pre-0.2.0 behavior of `update_bookmark`, extracted so the
-    strict path is the default and the implicit create is opt-in.
+    This is the pre-`linkhut-lib 0.1.0` behavior of `update_bookmark`,
+    extracted so the strict path is the default and the implicit create
+    is opt-in.
 
     Args:
         url (str): The URL of the bookmark to upsert.
@@ -426,8 +427,9 @@ def upsert_bookmark(
     try:
         bookmarks = get_bookmarks(url=url)
     except BookmarkNotFoundError:
-        # URL not bookmarked → create path. Mirror the pre-0.2.0 default
-        # of public + not-to-read when the caller didn't specify.
+        # URL not bookmarked → create path. Mirror the pre-`linkhut-lib
+        # 0.1.0` default of public + not-to-read when the caller didn't
+        # specify.
         private: bool = new_private if new_private is not None else False
         to_read: bool = new_to_read if new_to_read is not None else False
         result = create_bookmark(

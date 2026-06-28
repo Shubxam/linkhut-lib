@@ -1,17 +1,17 @@
 # TODO — linkhut-lib architecture review follow-ups
 
 Generated from the architecture review of `linkhut-lib`. Items are grouped by
-category and prioritized within each. **Do the P0 items before tagging `0.2.0`.**
+category and prioritized within each. **Do the P0 items before tagging `0.1.0`.**
 
-> **0.2.0 progress:** P0 items complete. P1 API-correctness, build-config,
+> **0.1.0 progress:** P0 items complete. P1 API-correctness, build-config,
 > and CHANGELOG items complete (2026-06-21). §2 P1 tests for the seven
 > public functions landed on 2026-06-27 — see §2 for the new test files
 > and §8 for the typed-result shapes and patterns those tests build on.
 
 Priority legend:
 
-- **P0** — Release-blocker. The current `0.1.x` shape cannot ship to PyPI in
-  this state.
+- **P0** — Release-blocker. The current pre-release shape cannot ship
+  to PyPI in this state.
 - **P1** — Trust-blocker. New users will hit these within their first session
   and lose confidence.
 - **P2** — Quality. The library works but the smell will rot if left.
@@ -252,8 +252,8 @@ the next release; all block "people who aren't you" trusting the project.
       checked-in `CHANGELOG.md` is what PyPI renders and what contributors
       read first.
       *Done 2026-06-21.* `CHANGELOG.md` added at the repo root with
-      `[Unreleased]` and `[0.2.0]` sections. The 0.2.0 entry spells out the
-      breaking changes (`update_bookmark` strict, typed result shapes),
+      `[Unreleased]` and `[0.1.0]` sections. The 0.1.0 entry spells out
+      the breaking changes (`update_bookmark` strict, typed result shapes),
       the additions (`upsert_bookmark`, `validate_dt_strict`, etc.), and
       a "Known gaps" section listing documented-but-unwrapped endpoints
       (`/v1/tags/get`, `/v1/posts/dates`, `/v1/posts/all`, `/v1/posts/update`,
@@ -286,9 +286,9 @@ the next release; all block "people who aren't you" trusting the project.
       is good but not built. Optional before 1.0; required if you want
       Read the Docs.
 
-- [ ] **[P3] Cut a `0.2.0` release** once the P0/P1 items above are done.
-      The version bump signals "API changed" and gives you a clean semver
-      boundary before introducing the optional `LinkhutLib` class.
+- [ ] **[P3] Cut a `0.1.0` release** once the P0/P1 items above are done.
+      The version bump signals "first public release" and gives a clean
+      semver boundary before introducing the optional `LinkhutLib` class.
 
 ---
 
@@ -336,11 +336,11 @@ If you only have a few hours, here's the order:
    round-trip footgun.
 
 That's ~4 hours of focused work and gets you from "mid-refactor" to
-"shippable 0.2.0." Everything else can land in 0.2.x point releases.
+"shippable 0.1.0." Everything else can land in 0.1.x point releases.
 
 ---
 
-## 8. Implementation notes — 0.2.0 refactor (2026-06-21)
+## 8. Implementation notes — 0.1.0 refactor (2026-06-21)
 
 Captured so the next contributor doesn't have to re-derive these shapes from
 reading the code. All of the below is what shipped in this session.
@@ -385,7 +385,7 @@ if result.outcome == CreateOutcome.CREATED:
 - `update_bookmark(url, ...)` — strict; raises `BookmarkNotFoundError` if
   the URL isn't bookmarked. New default behavior; was the footgun.
 - `upsert_bookmark(url, ...)` — creates if missing, updates if present.
-  Pre-0.2.0 behavior, kept under a clearer name.
+  Pre-`linkhut-lib` behavior, kept under a clearer name.
 
 Both are exported from `linkhut_lib` alongside the typed results.
 
@@ -470,4 +470,4 @@ Both must stay green as §2 tests are added.
 ---
 
 *Generated from the architecture review. See `docs/development.md` for the
-broader workflow. 0.2.0 implementation notes appended on 2026-06-21.*
+broader workflow. 0.1.0 implementation notes appended on 2026-06-21.*
